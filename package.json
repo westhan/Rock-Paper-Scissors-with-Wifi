@@ -1,0 +1,24 @@
+{
+  "name": "tasto-oyunu",
+  "version": "1.0.0",
+  "description": "Tas Kagit Makas - WiFi Cok Oyunculu",
+  "main": "server.js",
+  "bin": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "build": "pkg server.js --targets node18-win-x64 --output dist/TasKagitMakas.exe --compress GZip"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "pkg": {
+    "assets": [
+      "public/**/*",
+      "node_modules/socket.io/client-dist/**/*"
+    ]
+  },
+  "dependencies": {
+    "express": "^5.2.1",
+    "socket.io": "^4.8.3"
+  }
+}
