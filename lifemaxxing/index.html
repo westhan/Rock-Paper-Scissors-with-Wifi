@@ -98,13 +98,15 @@
         <div class="epic-line" id="dailyQuote"></div>
       </div>
 
+      <!-- ANA GÖREVLER: en üstte -->
+      <div class="section-title">🎯 Ana Görevler <span class="hint">(en önemli 5 · +50 XP · sürükleyerek sırala)</span></div>
+      <div id="mainQuests" class="quest-list"></div>
+
+      <button class="btn btn-night btn-block mt" onclick="App.openNight()">🌙 Günü Kapat — Kaydırarak Değerlendir</button>
+
       <!-- ASIL TAKİPLER: büyük sayaçlar -->
       <div class="section-title">⚔️ Asıl Savaşlar</div>
       <div id="mainTimers" class="timer-cards"></div>
-
-      <!-- ANA GÖREVLER -->
-      <div class="section-title">🎯 Ana Görevler <span class="hint">(en önemli 5)</span></div>
-      <div id="mainQuests" class="quest-list"></div>
 
       <!-- BUGÜNÜN DİĞER GÖREVLERİ -->
       <div class="section-title">🗡️ Bugünün Görevleri</div>
@@ -173,6 +175,8 @@
         <div class="hero-rank-big" id="profileRank">Clown</div>
         <p class="hint-block center">Anonim kal — burada kimse gerçek adını bilmez.</p>
       </div>
+      <div class="section-title">⚡ Seviye</div>
+      <div id="levelCard" class="card level-card"></div>
       <div class="section-title">📈 İstatistikler</div>
       <div id="statsGrid" class="stats-grid"></div>
       <div class="section-title">🏆 Başarımlar</div>
@@ -186,6 +190,38 @@
         <button class="btn btn-outline" onclick="document.getElementById('importFile').click()">⬆️ Yedek Yükle</button>
       </div>
       <input type="file" id="importFile" accept=".json" class="hidden" onchange="App.importData(event)">
+    </section>
+
+    <!-- ===== ÇALIŞMA MERKEZİ ===== -->
+    <section id="page-study" class="page hidden">
+      <div class="section-title">📚 Çalışma Merkezi</div>
+      <p class="hint-block">Sınav yolculuğunu parçala: kitaplar, notlar, dersler ve süre. Her tamamlanan madde seni hedefe yaklaştırır.</p>
+      <div class="tab-row">
+        <button class="tab active" data-stab="time" onclick="App.studyTab('time')">⏱️ Süre</button>
+        <button class="tab" data-stab="books" onclick="App.studyTab('books')">📕 Kitaplar</button>
+        <button class="tab" data-stab="notes" onclick="App.studyTab('notes')">📝 Notlar</button>
+        <button class="tab" data-stab="lessons" onclick="App.studyTab('lessons')">🎓 Dersler</button>
+      </div>
+      <div id="studyTimePane">
+        <div class="study-clock-card">
+          <div class="study-clock" id="studyClock">00:00</div>
+          <div class="hint-block center" id="studyToday"></div>
+          <div class="row-2">
+            <button class="btn btn-gold" id="studyStartBtn" onclick="App.studyToggleTimer()">▶ Başlat</button>
+            <button class="btn btn-outline" onclick="App.studyManual()">＋ Elle dk ekle</button>
+          </div>
+        </div>
+        <div class="section-title">Son 7 Gün</div>
+        <div id="studyWeek"></div>
+      </div>
+      <div id="studyListPane" class="hidden">
+        <div class="add-row">
+          <input id="stNewItem" placeholder="Yeni madde ekle (örn: Tarih 1. ünite)">
+          <button class="btn btn-gold" onclick="App.studyAddItem()">＋</button>
+        </div>
+        <div id="studyItems" class="quest-list"></div>
+      </div>
+      <button class="btn btn-outline btn-block mt" onclick="App.go('home')">← Ana Sayfa</button>
     </section>
 
     <!-- ===== WIDGET (tam ekran sayaç) ===== -->
@@ -243,6 +279,37 @@
     <div class="row-2 mt">
       <button class="btn btn-gold" onclick="App.saveChallenge()">🔥 Başlat</button>
       <button class="btn btn-outline" onclick="App.closeModal('challengeModal')">Vazgeç</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ GECE DEĞERLENDİRMESİ ============ -->
+<div id="nightOverlay" class="night-overlay hidden">
+  <div class="night-head">
+    <span>🌙 Gece Değerlendirmesi</span>
+    <button class="crisis-close" onclick="App.closeNight()">✕</button>
+  </div>
+  <p class="night-sub">Sağa kaydır = Yaptım ✅ &nbsp;·&nbsp; Sola kaydır = Yapmadım ❌</p>
+  <div class="night-stack" id="nightStack"></div>
+  <div class="night-btns" id="nightBtns">
+    <button class="night-no" onclick="App.nightSwipe(false)">✕</button>
+    <button class="night-yes" onclick="App.nightSwipe(true)">✓</button>
+  </div>
+</div>
+
+<!-- ============ EKRAN SÜRESİ ============ -->
+<div id="screenModal" class="modal hidden">
+  <div class="modal-inner">
+    <h3>📵 Ekran Süresi Takibi</h3>
+    <p class="hint-block">Apple, Ekran Süresi verisini uygulamalara otomatik açmaz (güvenlik politikası — App Store sürümünde bile yalnızca uygulama içi gösterim mümkün). Pratik yol: <b>Ayarlar → Ekran Süresi</b>'ndeki sayıyı buraya yaz. 10 saniye sürer, hedefin altındaysan görev otomatik tiklenir. ✅</p>
+    <label>Bugünkü ekran süresi (dakika)</label>
+    <input id="scMinutes" type="number" min="0" placeholder="örn: 95">
+    <label>Günlük hedef (dakika)</label>
+    <input id="scGoal" type="number" min="0">
+    <div id="scWeek"></div>
+    <div class="row-2 mt">
+      <button class="btn btn-gold" onclick="App.saveScreen()">💾 Kaydet</button>
+      <button class="btn btn-outline" onclick="App.closeModal('screenModal')">Kapat</button>
     </div>
   </div>
 </div>

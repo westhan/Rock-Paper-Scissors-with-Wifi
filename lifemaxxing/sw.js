@@ -1,5 +1,5 @@
 /* LifeMaxx Service Worker — tam offline çalışma */
-const CACHE = 'lifemaxx-v1';
+const CACHE = 'lifemaxx-v2';
 const ASSETS = [
   './',
   './index.html',

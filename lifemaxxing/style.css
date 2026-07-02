@@ -334,6 +334,86 @@ label { font-size: 12px; color: var(--muted); display: block; margin: 4px 0 4px;
 .crisis-step textarea { background: rgba(255,255,255,.06); border-color: #4a2723; color: var(--text); }
 .victory-emoji { font-size: 72px; margin-top: 30px; }
 
+/* ===== Gece Değerlendirmesi ===== */
+.btn-night {
+  background: linear-gradient(135deg, #2c3e6b, #1a2540);
+  color: #cdd9f5; border: 1px solid #3a4d7d;
+}
+.night-overlay {
+  position: fixed; inset: 0; z-index: 100;
+  background: radial-gradient(120% 100% at 50% 0%, #101a33 0%, #05070f 70%);
+  display: flex; flex-direction: column;
+  padding: calc(16px + env(safe-area-inset-top)) 20px calc(20px + env(safe-area-inset-bottom));
+}
+.night-head {
+  display: flex; justify-content: space-between; align-items: center;
+  font-weight: 800; letter-spacing: 1px; color: #9fb4e8;
+}
+.night-head .crisis-close { border-color: #2c3e6b; color: #9fb4e8; }
+.night-sub { text-align: center; color: #6d7fa8; font-size: 13px; margin: 12px 0; }
+.night-stack { flex: 1; position: relative; max-width: 420px; width: 100%; margin: 0 auto; }
+.night-card {
+  position: absolute; inset: 0; margin: auto;
+  max-height: 340px;
+  background: linear-gradient(160deg, #1b2540, #121a2e);
+  border: 1px solid #33436e; border-radius: 24px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  text-align: center; padding: 24px; touch-action: none; cursor: grab;
+  box-shadow: 0 10px 30px rgba(0,0,0,.5);
+}
+.nc-badge {
+  font-size: 11px; font-weight: 800; letter-spacing: 1px;
+  color: var(--gold); background: rgba(232,185,60,.12);
+  border: 1px solid rgba(232,185,60,.35); border-radius: 20px; padding: 4px 12px;
+}
+.nc-name { font-size: 24px; font-weight: 800; margin-top: 16px; line-height: 1.3; }
+.nc-meta { color: #7d90bd; font-size: 13px; margin-top: 8px; }
+.nc-q { color: #aebde0; font-size: 15px; margin-top: 22px; }
+.nc-arrows { display: flex; justify-content: space-between; width: 100%; margin-top: 18px; color: #55648c; font-size: 12px; }
+.night-btns { display: flex; justify-content: center; gap: 40px; padding-top: 16px; }
+.night-btns button {
+  width: 64px; height: 64px; border-radius: 50%; font-size: 26px; font-weight: 800;
+  border: 2px solid; background: transparent; cursor: pointer;
+}
+.night-no { color: #e05555; border-color: #e05555; }
+.night-yes { color: #4cc98a; border-color: #4cc98a; }
+.night-done { text-align: center; margin: auto; color: #cdd9f5; }
+.night-done .nd-emoji { font-size: 64px; }
+.night-done p { color: #8fa3d1; line-height: 1.6; }
+
+/* ===== Çalışma Merkezi ===== */
+.study-clock-card {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 20px; padding: 22px; text-align: center;
+}
+.study-clock {
+  font-size: 56px; font-weight: 800; font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+.study-clock.running { color: var(--green); }
+.add-row { display: flex; gap: 8px; align-items: flex-start; }
+.add-row input { flex: 1; }
+.add-row .btn { padding: 12px 18px; }
+.week-row {
+  display: flex; align-items: center; gap: 10px;
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 12px; padding: 10px 14px; margin-top: 6px; font-size: 13px;
+}
+.week-row > span:first-child { width: 110px; color: var(--muted); }
+.week-bar { flex: 1; height: 8px; background: #2a3549; border-radius: 6px; overflow: hidden; }
+.week-fill { display: block; height: 100%; background: linear-gradient(90deg, var(--gold), var(--green)); }
+.week-min { margin-left: auto; font-weight: 700; white-space: nowrap; }
+
+/* ===== Seviye kartı ===== */
+.level-card .lv-num { font-size: 22px; font-weight: 800; color: var(--gold); margin-bottom: 10px; }
+.lv-row { display: flex; justify-content: space-between; font-size: 13px; color: var(--muted); margin: 8px 0 4px; }
+.lv-bar { height: 10px; background: #2a3549; border-radius: 6px; overflow: hidden; }
+.lv-fill { height: 100%; background: linear-gradient(90deg, var(--gold), #f5d76e); border-radius: 6px; }
+.lv-fill-main { background: linear-gradient(90deg, #4cc98a, #7ee0ac); }
+
+/* Görev satırı araç butonları */
+.q-tool { background: none; border: none; font-size: 18px; cursor: pointer; padding: 4px; }
+
 /* ===== Modallar ===== */
 .modal {
   position: fixed; inset: 0; z-index: 90;

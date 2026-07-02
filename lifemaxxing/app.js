@@ -56,6 +56,9 @@ const FREQ_LABEL = {
   'free': 'Serbest'
 };
 
+// XP puanları: Ana Görevler (top 5) kritik ağırlıkta
+const XP_MAIN = 50, XP_REGULAR = 10, XP_FREE = 15, XP_CRISIS = 20, XP_SCHEMA = 10;
+
 const QUOTES = [
   'Kahraman, dürtülerinin efendisi olandır.',
   'Disiplin, kendine verdiğin sözü kimse bakmıyorken tutmaktır.',
@@ -90,7 +93,9 @@ const ACHIEVEMENTS = [
   { id: 'crisis',   e: '🌊', n: 'Dalga Kıran',   d: 'Kriz modunda 5 dalga atlat',    f: s => s.crisisSurvived >= 5 },
   { id: 'journal',  e: '📜', n: 'Vakanüvis',     d: '10 günlük kaydı',               f: s => s.journalCount >= 10 },
   { id: 'hundred',  e: '💯', n: 'Yüzler Ordusu', d: 'Toplam 100 görev tamamla',      f: s => s.totalDone >= 100 },
-  { id: 'chall',    e: '🏆', n: 'Meydan Okuyan', d: 'Bir challenge bitir',           f: s => s.challengesDone >= 1 }
+  { id: 'chall',    e: '🏆', n: 'Meydan Okuyan', d: 'Bir challenge bitir',           f: s => s.challengesDone >= 1 },
+  { id: 'lv5',      e: '⚡', n: 'Yükselen Güç',  d: 'Seviye 5 ol',                   f: s => s.level >= 5 },
+  { id: 'lv10',     e: '🌟', n: 'Efsane',        d: 'Seviye 10 ol',                  f: s => s.level >= 10 }
 ];
 
 // ---------- Varsayılan veri ----------
@@ -148,14 +153,19 @@ function defaultState() {
     series: 'chad',
     habits: defaultHabits(),
     done: {},           // { habitId: { 'YYYY-MM-DD': true } }
-    timers: { h1: Date.now(), h9: Date.now() },  // gün sayaçları: habitId -> start ts
+    timers: { h1: Date.now(), h9: Date.now() },  // gün sayaçları
     bestNofap: 0,
-    journal: [],        // { ts, text }
-    schemas: [],        // { ts, trigger, thought, feeling, action }
-    challenges: [],     // { id, name, days, start, done }
+    journal: [],
+    schemas: [],
+    challenges: [],
     crisisSurvived: 0,
     widgetHabit: 'h1',
-    firstUse: Date.now()
+    firstUse: Date.now(),
+    // Çalışma Merkezi
+    study: { items: { books: [], notes: [], lessons: [] }, log: {}, running: null },
+    // Ekran süresi
+    screenLog: {},      // { 'YYYY-MM-DD': dakika }
+    screenGoal: 120
   };
 }
 
@@ -175,20 +185,22 @@ function load() {
   try {
     const raw = localStorage.getItem('lifemaxx');
     S = raw ? Object.assign(defaultState(), JSON.parse(raw)) : defaultState();
+    // eski sürümden yükseltme
+    if (!S.study) S.study = defaultState().study;
+    if (!S.screenLog) S.screenLog = {};
+    if (!S.screenGoal) S.screenGoal = 120;
   } catch (e) { S = defaultState(); }
 }
 function save() { localStorage.setItem('lifemaxx', JSON.stringify(S)); }
 
-// ---------- Rozet hesabı ----------
+// ---------- Rozet & sayaç ----------
 function rankForDays(days) {
   let idx = 0;
   for (let i = 0; i < BADGE_DAYS.length; i++) if (days >= BADGE_DAYS[i]) idx = i;
   return idx;
 }
 function currentRank() {
-  const days = timerDays('h1'); // NoFap ana rozet kaynağı
-  const idx = rankForDays(days);
-  return SERIES[S.series].ranks[idx];
+  return SERIES[S.series].ranks[rankForDays(timerDays('h1'))];
 }
 function timerDays(id) {
   if (!S.timers[id]) return 0;
@@ -201,35 +213,104 @@ function timerClock(id) {
   return pad(h) + ':' + pad(m) + ':' + pad(s);
 }
 
-// ---------- Görev tamamlama mantığı ----------
-function isDoneToday(h) { return !!(S.done[h.id] && S.done[h.id][dateKey()]); }
-function countInWeek(h) {
-  const ws = weekStart(new Date());
+// ---------- XP & Seviye ----------
+// Ana Görevler (top 5) 50 XP — seviye atlamak için hem XP hem Ana Görev tamamlaması ŞART.
+function xpForHabit(h) { return h.main ? XP_MAIN : (h.freq === 'free' ? XP_FREE : XP_REGULAR); }
+function totalXP() {
+  let xp = 0;
+  for (const h of S.habits) xp += Object.keys(S.done[h.id] || {}).length * xpForHabit(h);
+  xp += S.crisisSurvived * XP_CRISIS + S.schemas.length * XP_SCHEMA;
+  return xp;
+}
+function mainDoneCount() {
   let c = 0;
-  const log = S.done[h.id] || {};
-  for (const k in log) { if (new Date(k + 'T12:00') >= ws) c++; }
+  for (const h of S.habits) if (h.main) c += Object.keys(S.done[h.id] || {}).length;
   return c;
 }
-function countInMonth(h) {
-  const now = new Date(); let c = 0;
+function xpNeed(L) { return Math.round(200 * Math.pow(L - 1, 1.5)); }   // L. seviyeye ulaşmak için XP
+function mainNeed(L) { return 8 * (L - 1); }                            // L. seviye için Ana Görev tamamlaması
+function level() {
+  const xp = totalXP(), md = mainDoneCount();
+  let L = 1;
+  while (L < 99 && xp >= xpNeed(L + 1) && md >= mainNeed(L + 1)) L++;
+  return L;
+}
+function todayXP() {
+  const k = dateKey();
+  let xp = 0;
+  for (const h of S.habits) if (S.done[h.id] && S.done[h.id][k]) xp += xpForHabit(h);
+  return xp;
+}
+
+// ---------- Görev tamamlama & seri mantığı ----------
+function isDoneToday(h) { return !!(S.done[h.id] && S.done[h.id][dateKey()]); }
+function countRange(h, start, days) {
   const log = S.done[h.id] || {};
+  const end = new Date(start); end.setDate(end.getDate() + days);
+  let c = 0;
+  for (const k in log) { const d = new Date(k + 'T12:00'); if (d >= start && d < end) c++; }
+  return c;
+}
+function countInWeek(h) { return countRange(h, weekStart(new Date()), 7); }
+function countInMonth(h) {
+  const now = new Date();
   const pre = now.getFullYear() + '-' + pad(now.getMonth() + 1);
+  const log = S.done[h.id] || {};
+  let c = 0;
   for (const k in log) if (k.startsWith(pre)) c++;
   return c;
 }
 function lastDone(h) {
-  const log = S.done[h.id] || {};
-  const keys = Object.keys(log).sort();
+  const keys = Object.keys(S.done[h.id] || {}).sort();
   return keys.length ? keys[keys.length - 1] : null;
 }
+// Günlük seri (ardışık günler)
 function streak(h) {
   const log = S.done[h.id] || {};
   let s = 0; const d = new Date();
-  if (!log[dateKey(d)]) d.setDate(d.getDate() - 1); // bugün henüz yapılmadıysa dünden say
+  if (!log[dateKey(d)]) d.setDate(d.getDate() - 1);
   while (log[dateKey(d)]) { s++; d.setDate(d.getDate() - 1); }
   return s;
 }
-// Bu görev bugün "beklenen" mi? (serbest görevler asla beklenmez → yük yok)
+// Haftalık seri: haftada N kez yapmak seriyi korur (hafta bitmeden bozulmaz)
+function weekStreak(h, n) {
+  let s = 0;
+  const ws = weekStart(new Date());
+  if (countRange(h, ws, 7) >= n) s++;
+  const d = new Date(ws);
+  while (true) {
+    d.setDate(d.getDate() - 7);
+    if (countRange(h, new Date(d), 7) >= n) s++;
+    else break;
+  }
+  return s;
+}
+// Aylık seri
+function monthStreak(h, n) {
+  const log = S.done[h.id] || {};
+  const cnt = (y, m) => {
+    const pre = y + '-' + pad(m + 1);
+    let c = 0;
+    for (const k in log) if (k.startsWith(pre)) c++;
+    return c;
+  };
+  const now = new Date();
+  let y = now.getFullYear(), m = now.getMonth(), s = 0;
+  if (cnt(y, m) >= n) s++;
+  while (true) {
+    m--; if (m < 0) { m = 11; y--; }
+    if (cnt(y, m) >= n) s++;
+    else break;
+  }
+  return s;
+}
+// Her görev için seri etiketi
+function streakLabel(h) {
+  if (h.freq === 'daily') { const s = streak(h); return s > 0 ? '🔥 ' + s + ' gün' : ''; }
+  if (h.freq.startsWith('weekly-')) { const s = weekStreak(h, +h.freq.split('-')[1]); return s > 0 ? '🔥 ' + s + ' hafta' : ''; }
+  if (h.freq.startsWith('monthly-')) { const s = monthStreak(h, +h.freq.split('-')[1]); return s > 0 ? '🔥 ' + s + ' ay' : ''; }
+  return '';
+}
 function neededToday(h) {
   if (h.freq === 'daily') return !isDoneToday(h);
   if (h.freq === 'free') return false;
@@ -246,17 +327,24 @@ function toggleDone(id) {
   else S.done[id][k] = true;
   save(); render();
 }
+function tickToday(id) {
+  S.done[id] = S.done[id] || {};
+  S.done[id][dateKey()] = true;
+}
+
+// Özel görevler
+function studyHabit() { return S.habits.find(h => h.id === 'h9') || S.habits.find(h => h.name.toLowerCase().includes('sınav')); }
+function screenHabit() { return S.habits.find(h => h.name.toLowerCase().includes('ekran')); }
 
 // ---------- İstatistik ----------
 function stats() {
   let totalDone = 0, bestStreak = 0;
   for (const h of S.habits) {
-    const log = S.done[h.id] || {};
-    totalDone += Object.keys(log).length;
+    totalDone += Object.keys(S.done[h.id] || {}).length;
     if (h.freq === 'daily') bestStreak = Math.max(bestStreak, streak(h));
   }
   const nofapNow = timerDays('h1');
-  if (nofapNow > S.bestNofap) { S.bestNofap = nofapNow; }
+  if (nofapNow > S.bestNofap) S.bestNofap = nofapNow;
   return {
     totalDone, bestStreak,
     bestNofap: Math.max(S.bestNofap, nofapNow),
@@ -264,7 +352,8 @@ function stats() {
     journalCount: S.journal.length,
     crisisSurvived: S.crisisSurvived,
     challengesDone: S.challenges.filter(c => c.done).length,
-    daysUsed: Math.floor((Date.now() - S.firstUse) / 86400000) + 1
+    daysUsed: Math.floor((Date.now() - S.firstUse) / 86400000) + 1,
+    level: level(), xp: totalXP(), mainDone: mainDoneCount()
   };
 }
 
@@ -282,28 +371,28 @@ function render() {
   if (currentPage === 'guild') renderGuild();
   if (currentPage === 'profile') renderProfile();
   if (currentPage === 'widget') renderWidget();
+  if (currentPage === 'study') renderStudy();
 }
 
 function renderTop() {
   const r = currentRank();
   $('topAvatar').textContent = r.e;
   $('topHeroName').textContent = S.heroName || 'İsimsiz Kahraman';
-  $('topHeroRank').textContent = r.n + ' · ' + timerDays('h1') + ' gün';
+  $('topHeroRank').textContent = 'Lv ' + level() + ' · ' + r.n + ' · ' + totalXP() + ' XP';
 }
 
 // ----- Ana sayfa -----
 function renderHome() {
-  const q = QUOTES[new Date().getDate() % QUOTES.length];
-  $('dailyQuote').textContent = '“' + q + '”';
+  $('dailyQuote').textContent = '“' + QUOTES[new Date().getDate() % QUOTES.length] + '”';
+
+  // Ana görevler (en üstte, sürüklenebilir)
+  const mains = S.habits.filter(h => h.main).sort((a, b) => a.order - b.order);
+  $('mainQuests').innerHTML = mains.map(h => questHTML(h, true, true)).join('') ||
+    '<p class="hint-block">Henüz ana görev yok. Görevler sayfasından ⭐ ile seç.</p>';
+  attachDrag($('mainQuests'));
 
   // Sayaç kartları
-  const timers = S.habits.filter(h => h.timer);
-  $('mainTimers').innerHTML = timers.map(h => timerCardHTML(h)).join('');
-
-  // Ana görevler
-  const mains = S.habits.filter(h => h.main && !h.timer).sort((a, b) => a.order - b.order);
-  $('mainQuests').innerHTML = mains.map(h => questHTML(h, true)).join('') ||
-    '<p class="hint-block">Henüz ana görev yok. Görevler sayfasından ⭐ ile seç.</p>';
+  $('mainTimers').innerHTML = S.habits.filter(h => h.timer).map(h => timerCardHTML(h)).join('');
 
   // Bugün beklenenler (ana olmayan)
   const today = S.habits.filter(h => !h.main && !h.timer && h.freq !== 'free' && (neededToday(h) || isDoneToday(h)))
@@ -326,6 +415,7 @@ function timerCardHTML(h) {
   const frac = next ? Math.min(1, (days - prev) / (next - prev)) : 1;
   const C = 2 * Math.PI * 76;
   const isNofap = h.id === 'h1';
+  const isStudy = studyHabit() && h.id === studyHabit().id;
   return `
   <div class="timer-card">
     <div class="timer-name">${esc(h.name)}</div>
@@ -345,36 +435,39 @@ function timerCardHTML(h) {
       ${nextRank ? `<span class="timer-next">→ ${nextRank.n} (${next} gün)</span>` : '<span class="timer-next">MAX 👑</span>'}
     </div>
     <div class="row-2">
-      ${isNofap ? '<button class="btn btn-danger" onclick="App.openCrisis()">🆘 Kriz Modu</button>' : ''}
-      <button class="btn btn-outline" onclick="App.askReset('${h.id}')">↺ Sıfırla</button>
-      <button class="btn btn-outline" onclick="App.showWidget('${h.id}')">🧷 Widget</button>
+      ${isNofap ? '<button class="btn btn-danger" onclick="App.openCrisis()">🆘 Kriz</button>' : ''}
+      ${isStudy ? '<button class="btn btn-gold" onclick="App.go(\'study\')">📚 Çalışma Merkezi</button>' : ''}
+      <button class="btn btn-outline" onclick="App.askReset('${h.id}')">↺</button>
+      <button class="btn btn-outline" onclick="App.showWidget('${h.id}')">🧷</button>
     </div>
   </div>`;
 }
 
-function questHTML(h, isMain) {
+function questHTML(h, isMain, draggable) {
   const done = isDoneToday(h);
   let meta = FREQ_LABEL[h.freq] || '';
-  let right = '';
-  if (h.freq === 'daily') {
-    const s = streak(h);
-    if (s > 0) right = `<span class="q-streak">🔥 ${s}</span>`;
-  } else if (h.freq.startsWith('weekly-')) {
-    meta += ` · bu hafta ${countInWeek(h)}/${h.freq.split('-')[1]}`;
-  } else if (h.freq.startsWith('monthly-')) {
-    meta += ` · bu ay ${countInMonth(h)}/${h.freq.split('-')[1]}`;
-  } else if (h.freq === 'free') {
+  if (h.freq.startsWith('weekly-')) meta += ` · bu hafta ${countInWeek(h)}/${h.freq.split('-')[1]}`;
+  else if (h.freq.startsWith('monthly-')) meta += ` · bu ay ${countInMonth(h)}/${h.freq.split('-')[1]}`;
+  else if (h.freq === 'free') {
     const ld = lastDone(h);
-    meta = ld ? 'Son: ' + ld : 'Hiç yapılmadı — sorun değil, hazır olunca';
+    meta = ld ? 'Son: ' + ld : 'Hazır olunca — yük yok';
   }
+  meta += ' · +' + xpForHabit(h) + ' XP';
+  const sl = streakLabel(h);
+  const sh = studyHabit(), sch = screenHabit();
+  const extra =
+    (sh && h.id === sh.id ? `<button class="q-tool" onclick="App.go('study')">📚</button>` : '') +
+    (sch && h.id === sch.id ? `<button class="q-tool" onclick="App.openScreen()">📵</button>` : '');
   return `
-  <div class="quest ${done ? 'done' : ''} ${isMain ? 'main-quest' : ''}">
+  <div class="quest ${done ? 'done' : ''} ${isMain ? 'main-quest' : ''}" data-id="${h.id}">
+    ${draggable ? `<span class="drag-handle" data-drag="${h.id}">⠿</span>` : ''}
     <button class="q-check" onclick="App.toggle('${h.id}')">✓</button>
     <div class="q-body">
       <div class="q-name">${isMain ? '⭐ ' : ''}${esc(h.name)}</div>
       <div class="q-meta">${esc(meta)}</div>
     </div>
-    ${right}
+    ${extra}
+    ${sl ? `<span class="q-streak">${sl}</span>` : ''}
   </div>`;
 }
 
@@ -390,16 +483,16 @@ function renderAllHabits() {
     block.innerHTML = `<div class="cat-head">${CATEGORIES[cat]} <span class="cat-count">${list.length} görev</span></div>`;
     const ul = document.createElement('div');
     ul.className = 'quest-list';
-    ul.dataset.cat = cat;
     for (const h of list) {
       const el = document.createElement('div');
       el.className = 'quest' + (h.main ? ' main-quest' : '');
       el.dataset.id = h.id;
+      const sl = streakLabel(h);
       el.innerHTML = `
         <span class="drag-handle" data-drag="${h.id}">⠿</span>
         <div class="q-body">
           <div class="q-name">${esc(h.name)} ${h.timer ? '⏱️' : ''}</div>
-          <div class="q-meta">${FREQ_LABEL[h.freq]}</div>
+          <div class="q-meta">${FREQ_LABEL[h.freq]} · +${xpForHabit(h)} XP ${sl ? '· ' + sl : ''}</div>
         </div>
         <button class="q-star ${h.main ? 'on' : ''}" onclick="App.toggleMain('${h.id}')">⭐</button>
         <button class="q-edit" onclick="App.openHabitForm('${h.id}')">✏️</button>`;
@@ -411,7 +504,8 @@ function renderAllHabits() {
   attachDrag(wrap);
 }
 
-// Basit dokunmatik sürükle-bırak (kategori içinde)
+// Dokunmatik sürükle-bırak: bırakınca görünür sıra, mevcut order değerlerine dağıtılır
+// (böylece Ana Görev sıralaması ile kategori sıralaması birbirini bozmaz)
 function attachDrag(wrap) {
   wrap.querySelectorAll('.drag-handle').forEach(handle => {
     handle.addEventListener('pointerdown', e => {
@@ -436,11 +530,12 @@ function attachDrag(wrap) {
         item.classList.remove('dragging');
         handle.removeEventListener('pointermove', move);
         handle.removeEventListener('pointerup', up);
-        // yeni sırayı kaydet
-        let order = 1;
-        wrap.querySelectorAll('.quest').forEach(q => {
-          const h = S.habits.find(x => x.id === q.dataset.id);
-          if (h) h.order = order++;
+        const ids = [...list.querySelectorAll('.quest')].map(q => q.dataset.id);
+        const slots = ids.map(id => S.habits.find(x => x.id === id))
+          .filter(Boolean).map(h => h.order).sort((a, b) => a - b);
+        ids.forEach((id, i) => {
+          const h = S.habits.find(x => x.id === id);
+          if (h) h.order = slots[i];
         });
         save();
       };
@@ -459,8 +554,7 @@ function renderBadges() {
       <div class="s-sub">${SERIES[k].ranks[8].n}'e uzanan yol</div>
     </div>`).join('');
 
-  const days = timerDays('h1');
-  const cur = rankForDays(days);
+  const cur = rankForDays(timerDays('h1'));
   $('badgeList').innerHTML = SERIES[S.series].ranks.map((r, i) => `
     <div class="badge-row ${i > cur ? 'locked' : ''} ${i === cur ? 'current' : ''}">
       <div class="b-emoji">${r.e}</div>
@@ -528,13 +622,24 @@ function renderProfile() {
   $('heroNameInput').value = S.heroName;
 
   const st = stats();
+  const L = st.level;
+  const xpCur = st.xp - xpNeed(L), xpNext = xpNeed(L + 1) - xpNeed(L);
+  const mdCur = st.mainDone, mdNext = mainNeed(L + 1);
+  $('levelCard').innerHTML = `
+    <div class="lv-num">⚡ Seviye ${L}</div>
+    <div class="lv-row"><span>XP</span><span>${st.xp} / ${xpNeed(L + 1)}</span></div>
+    <div class="lv-bar"><div class="lv-fill" style="width:${Math.min(100, Math.round(xpCur / xpNext * 100))}%"></div></div>
+    <div class="lv-row"><span>⭐ Ana Görev tamamlama <small>(seviye şartı)</small></span><span>${mdCur} / ${mdNext}</span></div>
+    <div class="lv-bar"><div class="lv-fill lv-fill-main" style="width:${Math.min(100, Math.round(mdCur / Math.max(1, mdNext) * 100))}%"></div></div>
+    <p class="hint-block">Seviye atlamak için XP tek başına yetmez — Ana Görevlerini (en etkili 5 mücadele) tamamlamak şarttır.</p>`;
+
   $('statsGrid').innerHTML = `
+    <div class="stat-tile"><div class="st-num">${st.xp}</div><div class="st-label">Toplam XP</div></div>
     <div class="stat-tile"><div class="st-num">${timerDays('h1')}</div><div class="st-label">NoFap (gün)</div></div>
     <div class="stat-tile"><div class="st-num">${st.bestNofap}</div><div class="st-label">NoFap Rekoru</div></div>
     <div class="stat-tile"><div class="st-num">${st.totalDone}</div><div class="st-label">Toplam Görev</div></div>
     <div class="stat-tile"><div class="st-num">${st.bestStreak}</div><div class="st-label">En İyi Seri</div></div>
-    <div class="stat-tile"><div class="st-num">${st.crisisSurvived}</div><div class="st-label">Atlatılan Kriz</div></div>
-    <div class="stat-tile"><div class="st-num">${st.daysUsed}</div><div class="st-label">Yolculuk Günü</div></div>`;
+    <div class="stat-tile"><div class="st-num">${st.crisisSurvived}</div><div class="st-label">Atlatılan Kriz</div></div>`;
 
   $('achievements').innerHTML = ACHIEVEMENTS.map(a => `
     <div class="ach ${a.f(st) ? '' : 'locked'}" title="${a.d}">
@@ -563,17 +668,74 @@ function renderWidget() {
     <div class="w-hint">Kapatmak için dokun</div>`;
 }
 
+// ----- Çalışma Merkezi -----
+let studyTabName = 'time';
+const STUDY_GROUPS = { books: '📕 Kitaplar', notes: '📝 Notlar', lessons: '🎓 Dersler' };
+
+function renderStudy() {
+  document.querySelectorAll('[data-stab]').forEach(t =>
+    t.classList.toggle('active', t.dataset.stab === studyTabName));
+  const isTime = studyTabName === 'time';
+  $('studyTimePane').classList.toggle('hidden', !isTime);
+  $('studyListPane').classList.toggle('hidden', isTime);
+
+  if (isTime) {
+    updateStudyClock();
+    $('studyStartBtn').textContent = S.study.running ? '⏸ Durdur & Kaydet' : '▶ Başlat';
+    // son 7 gün
+    let rows = '';
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(); d.setDate(d.getDate() - i);
+      const k = dateKey(d);
+      const min = S.study.log[k] || 0;
+      const label = i === 0 ? 'Bugün' : d.toLocaleDateString('tr-TR', { weekday: 'long', day: 'numeric', month: 'short' });
+      rows += `<div class="week-row"><span>${label}</span>
+        <span class="week-bar"><span class="week-fill" style="width:${Math.min(100, min / 3)}%"></span></span>
+        <span class="week-min">${min} dk</span></div>`;
+    }
+    $('studyWeek').innerHTML = rows;
+  } else {
+    const items = S.study.items[studyTabName] || [];
+    $('studyItems').innerHTML = items.map((it, i) => `
+      <div class="quest ${it.done ? 'done' : ''}">
+        <button class="q-check" onclick="App.studyToggleItem('${studyTabName}', ${i})">✓</button>
+        <div class="q-body"><div class="q-name">${esc(it.name)}</div>
+          <div class="q-meta">${it.done ? '✅ Tamamlandı' : STUDY_GROUPS[studyTabName]}</div></div>
+        <button class="q-edit" onclick="App.studyDelItem('${studyTabName}', ${i})">🗑️</button>
+      </div>`).join('') || '<p class="hint-block">Henüz madde yok. Yukarıdan ekle — örn. bitirilecek kitap, çözülecek deneme, izlenecek ders.</p>';
+  }
+}
+function updateStudyClock() {
+  const el = $('studyClock');
+  if (!el) return;
+  const base = (S.study.log[dateKey()] || 0);
+  let extra = 0;
+  if (S.study.running) extra = Math.floor((Date.now() - S.study.running) / 60000);
+  if (S.study.running) {
+    const sec = Math.floor((Date.now() - S.study.running) / 1000);
+    el.textContent = pad(Math.floor(sec / 60)) + ':' + pad(sec % 60);
+    el.classList.add('running');
+  } else {
+    el.textContent = '00:00';
+    el.classList.remove('running');
+  }
+  const t = $('studyToday');
+  if (t) t.textContent = 'Bugün toplam: ' + (base + extra) + ' dk çalıştın' + (S.study.running ? ' (sayaç çalışıyor…)' : '');
+}
+
 // Saat güncelleme
 setInterval(() => {
   document.querySelectorAll('[data-clock]').forEach(el => {
     el.textContent = timerClock(el.dataset.clock);
   });
+  if (currentPage === 'study' && studyTabName === 'time') updateStudyClock();
 }, 1000);
 
 /* ============================================================
    APP — kullanıcı eylemleri
    ============================================================ */
 let crisisInterval = null, crisisResetTarget = null, resetTargetId = null;
+let nightQueue = [];
 
 const App = {
   go(page) {
@@ -722,7 +884,6 @@ const App = {
     if (!s.trigger && !s.thought && !s.feeling && !s.action) { alert('En az bir alan doldur.'); return; }
     S.schemas.push(s);
     ['schTrigger', 'schThought', 'schFeeling', 'schAction'].forEach(id => $(id).value = '');
-    // Şema + sıfırlama akışıysa sayacı şimdi sıfırla
     if (crisisResetTarget) {
       if (crisisResetTarget === 'h1') {
         const d = timerDays('h1');
@@ -746,6 +907,136 @@ const App = {
     render();
   },
 
+  // --- Gece değerlendirmesi (kaydırmalı) ---
+  openNight() {
+    nightQueue = S.habits.filter(h => !h.timer && h.freq !== 'free' && !isDoneToday(h) && neededToday(h))
+      .sort((a, b) => (b.main ? 1 : 0) - (a.main ? 1 : 0) || a.order - b.order);
+    $('nightOverlay').classList.remove('hidden');
+    App.renderNight();
+  },
+  renderNight() {
+    const stack = $('nightStack');
+    if (!nightQueue.length) {
+      $('nightBtns').classList.add('hidden');
+      stack.innerHTML = `
+        <div class="night-done">
+          <div class="nd-emoji">🌟</div>
+          <h2>Gün Kapandı!</h2>
+          <p>Bugün <b>${todayXP()} XP</b> kazandın.<br>Seviye ${level()} · ${totalXP()} XP toplam</p>
+          <button class="btn btn-gold" onclick="App.closeNight()">İyi geceler, savaşçı 🌙</button>
+        </div>`;
+      return;
+    }
+    $('nightBtns').classList.remove('hidden');
+    // en fazla 3 kart göster (üstteki aktif)
+    stack.innerHTML = nightQueue.slice(0, 3).map((h, i) => `
+      <div class="night-card" style="z-index:${10 - i}; transform: translateY(${i * 10}px) scale(${1 - i * 0.05});" data-idx="${i}">
+        <div class="nc-badge">${h.main ? '⭐ ANA GÖREV · +50 XP' : '+' + xpForHabit(h) + ' XP'}</div>
+        <div class="nc-name">${esc(h.name)}</div>
+        <div class="nc-meta">${FREQ_LABEL[h.freq]}${streakLabel(h) ? ' · ' + streakLabel(h) : ''}</div>
+        <div class="nc-q">Bugün yaptın mı?</div>
+        <div class="nc-arrows"><span>← Yapmadım</span><span>Yaptım →</span></div>
+      </div>`).join('');
+    attachNightSwipe(stack.querySelector('.night-card'));
+  },
+  nightSwipe(yes) {
+    const card = $('nightStack').querySelector('.night-card');
+    if (!card || !nightQueue.length) return;
+    card.style.transition = 'transform .35s, opacity .35s';
+    card.style.transform = `translateX(${yes ? '' : '-'}120%) rotate(${yes ? 18 : -18}deg)`;
+    card.style.opacity = '0';
+    const h = nightQueue.shift();
+    if (yes) { tickToday(h.id); save(); }
+    setTimeout(() => App.renderNight(), 300);
+  },
+  closeNight() {
+    $('nightOverlay').classList.add('hidden');
+    render();
+  },
+
+  // --- Çalışma Merkezi ---
+  studyTab(t) { studyTabName = t; renderStudy(); },
+  studyToggleTimer() {
+    if (S.study.running) {
+      const min = Math.round((Date.now() - S.study.running) / 60000);
+      const k = dateKey();
+      S.study.log[k] = (S.study.log[k] || 0) + min;
+      S.study.running = null;
+      const sh = studyHabit();
+      if (min > 0 && sh) tickToday(sh.id);
+      save();
+      alert(min > 0 ? `⚔️ ${min} dakika kaydedildi!` : 'Süre 1 dakikadan kısaydı, kaydedilmedi.');
+    } else {
+      S.study.running = Date.now();
+      save();
+    }
+    renderStudy();
+  },
+  studyManual() {
+    const v = prompt('Kaç dakika çalıştın?');
+    const min = parseInt(v, 10);
+    if (!min || min < 1) return;
+    const k = dateKey();
+    S.study.log[k] = (S.study.log[k] || 0) + min;
+    const sh = studyHabit();
+    if (sh) tickToday(sh.id);
+    save(); renderStudy();
+  },
+  studyAddItem() {
+    const name = $('stNewItem').value.trim();
+    if (!name) return;
+    S.study.items[studyTabName].push({ name, done: false, ts: Date.now() });
+    $('stNewItem').value = '';
+    save(); renderStudy();
+  },
+  studyToggleItem(group, i) {
+    const it = S.study.items[group][i];
+    it.done = !it.done;
+    if (it.done) {
+      const sh = studyHabit();
+      if (sh) tickToday(sh.id);
+    }
+    save(); renderStudy();
+  },
+  studyDelItem(group, i) {
+    S.study.items[group].splice(i, 1);
+    save(); renderStudy();
+  },
+
+  // --- Ekran süresi ---
+  openScreen() {
+    $('scGoal').value = S.screenGoal;
+    $('scMinutes').value = S.screenLog[dateKey()] || '';
+    let rows = '';
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(); d.setDate(d.getDate() - i);
+      const k = dateKey(d);
+      const min = S.screenLog[k];
+      const label = i === 0 ? 'Bugün' : d.toLocaleDateString('tr-TR', { weekday: 'short', day: 'numeric' });
+      rows += `<div class="week-row"><span>${label}</span>
+        <span class="week-min">${min == null ? '—' : min + ' dk ' + (min <= S.screenGoal ? '✅' : '⚠️')}</span></div>`;
+    }
+    $('scWeek').innerHTML = rows;
+    $('screenModal').classList.remove('hidden');
+  },
+  saveScreen() {
+    const min = parseInt($('scMinutes').value, 10);
+    const goal = parseInt($('scGoal').value, 10);
+    if (goal > 0) S.screenGoal = goal;
+    if (!isNaN(min) && min >= 0) {
+      S.screenLog[dateKey()] = min;
+      const sch = screenHabit();
+      if (sch) {
+        S.done[sch.id] = S.done[sch.id] || {};
+        if (min <= S.screenGoal) S.done[sch.id][dateKey()] = true;
+        else delete S.done[sch.id][dateKey()];
+      }
+    }
+    save();
+    App.closeModal('screenModal');
+    render();
+  },
+
   // --- Günlük ---
   journalTab(m) { journalMode = m; renderJournal(); },
   saveJournal() {
@@ -753,9 +1044,8 @@ const App = {
     if (!t) return;
     S.journal.push({ ts: Date.now(), text: t });
     $('journalInput').value = '';
-    // "Günlük yazmak" görevini otomatik tikle
     const jh = S.habits.find(h => h.name.toLowerCase().includes('günlük'));
-    if (jh) { S.done[jh.id] = S.done[jh.id] || {}; S.done[jh.id][dateKey()] = true; }
+    if (jh) tickToday(jh.id);
     save(); renderJournal();
   },
   delJournal(i) { S.journal.splice(i, 1); save(); renderJournal(); },
@@ -809,6 +1099,34 @@ const App = {
 
   closeModal(id) { $(id).classList.add('hidden'); }
 };
+
+// Gece kartı kaydırma (dokunmatik)
+function attachNightSwipe(card) {
+  if (!card) return;
+  let startX = null;
+  card.addEventListener('pointerdown', e => {
+    startX = e.clientX;
+    card.setPointerCapture(e.pointerId);
+    card.style.transition = 'none';
+  });
+  card.addEventListener('pointermove', e => {
+    if (startX == null) return;
+    const dx = e.clientX - startX;
+    card.style.transform = `translateX(${dx}px) rotate(${dx / 12}deg)`;
+    card.style.opacity = String(Math.max(.4, 1 - Math.abs(dx) / 400));
+  });
+  card.addEventListener('pointerup', e => {
+    if (startX == null) return;
+    const dx = e.clientX - startX;
+    startX = null;
+    if (Math.abs(dx) > 90) App.nightSwipe(dx > 0);
+    else {
+      card.style.transition = 'transform .25s, opacity .25s';
+      card.style.transform = '';
+      card.style.opacity = '1';
+    }
+  });
+}
 
 // ---------- Başlat ----------
 load();
