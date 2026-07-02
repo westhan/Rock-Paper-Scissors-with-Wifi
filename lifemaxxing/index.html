@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#0d1117">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="LifeMaxx">
+<title>LifeMaxx — Kahramanın Yolculuğu</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- ============ KRİZ MODU (tam ekran) ============ -->
+<div id="crisisOverlay" class="crisis-overlay hidden">
+  <div class="crisis-inner">
+    <div class="crisis-header">
+      <span class="crisis-title">⚔️ KRİZ MODU</span>
+      <button class="crisis-close" onclick="App.closeCrisis()">✕</button>
+    </div>
+
+    <div id="crisisStep1" class="crisis-step">
+      <h2>Dur. Nefes al, savaşçı.</h2>
+      <p class="crisis-sub">Bu dürtü bir dalgadır. Dalgalar yükselir ve <b>her zaman</b> geri çekilir. Ortalama 15&nbsp;dakika sürer. Sen dalgadan büyüksün.</p>
+      <div class="breath-circle" id="breathCircle"><span id="breathText">Nefes Al</span></div>
+      <div class="crisis-timer" id="crisisTimer">05:00</div>
+      <p class="crisis-quote" id="crisisQuote"></p>
+      <div class="crisis-actions">
+        <button class="btn btn-gold" onclick="App.crisisAlternatives()">🔥 Enerjiyi Dönüştür</button>
+        <button class="btn btn-outline" onclick="App.crisisSchema()">📝 Şema Notu Yaz</button>
+      </div>
+    </div>
+
+    <div id="crisisStep2" class="crisis-step hidden">
+      <h2>Enerjiyi Dönüştür</h2>
+      <p class="crisis-sub">Bu enerji yakıttır. Onu yok etme — yönlendir. Şimdi birini seç ve yap:</p>
+      <div class="alt-list">
+        <button class="alt-item" onclick="App.crisisChooseAlt('💪 Spor / Şınav-Squat')">💪 <b>Spor</b><span>50 şınav ya da 5 dk squat. Kan başka yere gitsin.</span></button>
+        <button class="alt-item" onclick="App.crisisChooseAlt('💃 Dans / Bachata')">💃 <b>Dans</b><span>Bachata müziği aç, 1 şarkı boyunca çalış.</span></button>
+        <button class="alt-item" onclick="App.crisisChooseAlt('🤖 Yapay Zeka ile proje')">🤖 <b>Yapay Zeka Projesi</b><span>AI'ya bir proje fikri anlat, 10 dk konuş.</span></button>
+        <button class="alt-item" onclick="App.crisisChooseAlt('🎬 İçerik üretimi')">🎬 <b>İçerik Üret</b><span>Bir video fikri yaz ya da 1 dk kayıt al.</span></button>
+        <button class="alt-item" onclick="App.crisisChooseAlt('🚿 Soğuk duş')">🚿 <b>Soğuk Duş</b><span>90 saniye. Sistemi sıfırla.</span></button>
+        <button class="alt-item" onclick="App.crisisChooseAlt('🚶 Yürüyüş')">🚶 <b>Dışarı Çık</b><span>Telefonsuz 10 dk yürüyüş.</span></button>
+      </div>
+      <button class="btn btn-outline mt" onclick="App.crisisBack()">← Geri</button>
+    </div>
+
+    <div id="crisisStep3" class="crisis-step hidden">
+      <h2>Şema Notu</h2>
+      <p class="crisis-sub">Krize yaklaştığın her an bir veridir. Deseni çöz, savaşı kazan.</p>
+      <label>📍 Tetikleyici — ne oldu, neredeydin?</label>
+      <textarea id="schTrigger" rows="2" placeholder="Örn: Gece yalnızken telefonda geziniyordum..."></textarea>
+      <label>💭 Otomatik düşünce — aklından ne geçti?</label>
+      <textarea id="schThought" rows="2" placeholder="Örn: 'Bir kere olsa ne olur' ..."></textarea>
+      <label>❤️ Duygu ve vücut hissi</label>
+      <textarea id="schFeeling" rows="2" placeholder="Örn: Sıkıntı, yalnızlık, gerginlik..."></textarea>
+      <label>⚡ Ne yaptım / ne yapacağım?</label>
+      <textarea id="schAction" rows="2" placeholder="Örn: Kriz modunu açtım, şınav çekeceğim..."></textarea>
+      <div class="crisis-actions">
+        <button class="btn btn-gold" onclick="App.saveSchema()">💾 Kaydet</button>
+        <button class="btn btn-outline" onclick="App.crisisBack()">← Geri</button>
+      </div>
+    </div>
+
+    <div id="crisisStep4" class="crisis-step hidden">
+      <div class="victory-emoji">🏆</div>
+      <h2>Dalgayı Atlattın!</h2>
+      <p class="crisis-sub" id="crisisVictoryText">Bu bir zaferdir. Kahramanlar tam da bu anlarda doğar.</p>
+      <button class="btn btn-gold" onclick="App.closeCrisis(true)">⚔️ Savaşa Devam</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ ANA UYGULAMA ============ -->
+<div id="app">
+
+  <!-- ÜST BAR -->
+  <header class="topbar">
+    <div class="topbar-left" onclick="App.go('profile')">
+      <div class="avatar" id="topAvatar">🤡</div>
+      <div>
+        <div class="hero-name" id="topHeroName">Kahraman</div>
+        <div class="hero-rank" id="topHeroRank">Clown</div>
+      </div>
+    </div>
+    <button class="crisis-btn" onclick="App.openCrisis()">🆘 KRİZ</button>
+  </header>
+
+  <!-- SAYFALAR -->
+  <main id="pages">
+
+    <!-- ===== ANA SAYFA ===== -->
+    <section id="page-home" class="page">
+      <div class="epic-banner">
+        <div class="epic-line" id="dailyQuote"></div>
+      </div>
+
+      <!-- ASIL TAKİPLER: büyük sayaçlar -->
+      <div class="section-title">⚔️ Asıl Savaşlar</div>
+      <div id="mainTimers" class="timer-cards"></div>
+
+      <!-- ANA GÖREVLER -->
+      <div class="section-title">🎯 Ana Görevler <span class="hint">(en önemli 5)</span></div>
+      <div id="mainQuests" class="quest-list"></div>
+
+      <!-- BUGÜNÜN DİĞER GÖREVLERİ -->
+      <div class="section-title">🗡️ Bugünün Görevleri</div>
+      <div id="todayQuests" class="quest-list"></div>
+
+      <!-- SERBEST GÖREVLER -->
+      <div class="section-title">🏹 Serbest Görevler <span class="hint">(devamlılık yükü yok — yapınca işaretle)</span></div>
+      <div id="freeQuests" class="quest-list collapsed-list"></div>
+    </section>
+
+    <!-- ===== GÖREVLER (tümü / düzenleme / sıralama) ===== -->
+    <section id="page-habits" class="page hidden">
+      <div class="section-title">🗂️ Tüm Görevler</div>
+      <p class="hint-block">Basılı tutup sürükleyerek sırala. ⭐ ile Ana Görev yap (en fazla 5). Kategoriye ve sıklığa göre düzenle.</p>
+      <button class="btn btn-gold btn-block" onclick="App.openHabitForm()">＋ Yeni Görev Ekle</button>
+      <div id="allHabits"></div>
+    </section>
+
+    <!-- ===== ROZETLER ===== -->
+    <section id="page-badges" class="page hidden">
+      <div class="section-title">🏅 Rozet Serileri</div>
+      <p class="hint-block">Serini seç — profil resmin, asıl savaşındaki gün sayına göre yükselir.</p>
+      <div id="seriesPicker" class="series-picker"></div>
+      <div id="badgeList" class="badge-list"></div>
+    </section>
+
+    <!-- ===== GÜNLÜK / ŞEMA ===== -->
+    <section id="page-journal" class="page hidden">
+      <div class="section-title">📜 Savaş Günlüğü</div>
+      <div class="tab-row">
+        <button class="tab active" id="tabJournal" onclick="App.journalTab('journal')">Günlük</button>
+        <button class="tab" id="tabSchema" onclick="App.journalTab('schema')">Şema Notları</button>
+      </div>
+      <div id="journalPane">
+        <textarea id="journalInput" rows="3" placeholder="Bugün neler oldu, savaşçı?"></textarea>
+        <button class="btn btn-gold btn-block" onclick="App.saveJournal()">💾 Günlüğe Yaz</button>
+        <div id="journalEntries"></div>
+      </div>
+      <div id="schemaPane" class="hidden">
+        <p class="hint-block">Kriz anlarında tuttuğun şema notları. Desenleri burada gör: hangi tetikleyici tekrar ediyor?</p>
+        <button class="btn btn-outline btn-block" onclick="App.openCrisis(3)">＋ Yeni Şema Notu</button>
+        <div id="schemaEntries"></div>
+      </div>
+    </section>
+
+    <!-- ===== TAKIM (chat placeholder + challenge) ===== -->
+    <section id="page-guild" class="page hidden">
+      <div class="section-title">🛡️ Lonca</div>
+      <div class="card">
+        <h3>⚔️ Kişisel Challenge'lar</h3>
+        <p class="hint-block">Kendine meydan oku. (Online lonca odaları ve arkadaş challenge'ları internet sürümünde açılacak.)</p>
+        <button class="btn btn-gold btn-block" onclick="App.openChallengeForm()">＋ Challenge Başlat</button>
+        <div id="challengeList"></div>
+      </div>
+      <div class="card guild-soon">
+        <h3>💬 Lonca Odaları <span class="soon-tag">Yakında</span></h3>
+        <p>Anonim savaşçılarla sohbet odaları, amaç arkadaşlığı ve grup hedefleri online sürümle birlikte gelecek. Şimdilik tüm verilerin sadece bu cihazda — tamamen özel.</p>
+      </div>
+    </section>
+
+    <!-- ===== PROFİL ===== -->
+    <section id="page-profile" class="page hidden">
+      <div class="profile-hero">
+        <div class="avatar-big" id="profileAvatar">🤡</div>
+        <input id="heroNameInput" class="hero-name-input" maxlength="20" placeholder="Anonim savaşçı adı" onchange="App.setHeroName(this.value)">
+        <div class="hero-rank-big" id="profileRank">Clown</div>
+        <p class="hint-block center">Anonim kal — burada kimse gerçek adını bilmez.</p>
+      </div>
+      <div class="section-title">📈 İstatistikler</div>
+      <div id="statsGrid" class="stats-grid"></div>
+      <div class="section-title">🏆 Başarımlar</div>
+      <div id="achievements" class="ach-grid"></div>
+      <div class="section-title">🧷 Widget Modu</div>
+      <p class="hint-block">Bir sayacı tam ekran "widget" olarak aç, telefonunun ana ekranına bu uygulamayı ekle (Safari/Chrome → Paylaş → Ana Ekrana Ekle). Gerçek iOS/Android widget'ları App Store sürümünde gelecek.</p>
+      <div id="widgetPicker"></div>
+      <div class="section-title">⚙️ Veri</div>
+      <div class="row-2">
+        <button class="btn btn-outline" onclick="App.exportData()">⬇️ Yedek Al</button>
+        <button class="btn btn-outline" onclick="document.getElementById('importFile').click()">⬆️ Yedek Yükle</button>
+      </div>
+      <input type="file" id="importFile" accept=".json" class="hidden" onchange="App.importData(event)">
+    </section>
+
+    <!-- ===== WIDGET (tam ekran sayaç) ===== -->
+    <section id="page-widget" class="page hidden">
+      <div class="widget-full" id="widgetFull" onclick="App.go('home')"></div>
+    </section>
+  </main>
+
+  <!-- ALT NAVİGASYON -->
+  <nav class="bottombar">
+    <button class="nav-btn active" data-page="home" onclick="App.go('home')"><span>⚔️</span>Savaş</button>
+    <button class="nav-btn" data-page="habits" onclick="App.go('habits')"><span>🗂️</span>Görevler</button>
+    <button class="nav-btn" data-page="badges" onclick="App.go('badges')"><span>🏅</span>Rozetler</button>
+    <button class="nav-btn" data-page="journal" onclick="App.go('journal')"><span>📜</span>Günlük</button>
+    <button class="nav-btn" data-page="guild" onclick="App.go('guild')"><span>🛡️</span>Lonca</button>
+  </nav>
+</div>
+
+<!-- ============ GÖREV FORMU (modal) ============ -->
+<div id="habitModal" class="modal hidden">
+  <div class="modal-inner">
+    <h3 id="habitModalTitle">Yeni Görev</h3>
+    <label>Görev adı</label>
+    <input id="hfName" maxlength="60" placeholder="Örn: Arapça çalış">
+    <label>Kategori</label>
+    <select id="hfCategory"></select>
+    <label>Sıklık</label>
+    <select id="hfFreq">
+      <option value="daily">Her gün</option>
+      <option value="weekly-1">Haftada 1</option>
+      <option value="weekly-2">Haftada 2</option>
+      <option value="weekly-3">Haftada 3</option>
+      <option value="weekly-5">Haftada 5</option>
+      <option value="monthly-1">Ayda 1</option>
+      <option value="free">Serbest (arada bir — yük yok)</option>
+    </select>
+    <label class="check-row"><input type="checkbox" id="hfMain"> ⭐ Ana Görev (en fazla 5)</label>
+    <label class="check-row"><input type="checkbox" id="hfTimer"> ⏱️ Gün sayacı olsun (Asıl Savaş — NoFap gibi)</label>
+    <div class="row-2 mt">
+      <button class="btn btn-gold" onclick="App.saveHabitForm()">💾 Kaydet</button>
+      <button class="btn btn-outline" onclick="App.closeModal('habitModal')">Vazgeç</button>
+    </div>
+    <button id="hfDelete" class="btn btn-danger btn-block mt hidden" onclick="App.deleteHabit()">🗑️ Görevi Sil</button>
+  </div>
+</div>
+
+<!-- ============ CHALLENGE FORMU ============ -->
+<div id="challengeModal" class="modal hidden">
+  <div class="modal-inner">
+    <h3>⚔️ Yeni Challenge</h3>
+    <label>Challenge adı</label>
+    <input id="cfName" maxlength="60" placeholder="Örn: 30 gün NoFap">
+    <label>Süre (gün)</label>
+    <input id="cfDays" type="number" min="1" max="365" value="30">
+    <div class="row-2 mt">
+      <button class="btn btn-gold" onclick="App.saveChallenge()">🔥 Başlat</button>
+      <button class="btn btn-outline" onclick="App.closeModal('challengeModal')">Vazgeç</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ SIFIRLAMA ONAYI ============ -->
+<div id="resetModal" class="modal hidden">
+  <div class="modal-inner">
+    <h3>⚠️ Sayacı Sıfırla?</h3>
+    <p id="resetText" class="hint-block"></p>
+    <p class="hint-block">Düşmek yenilgi değildir — kalkmamak yenilgidir. Önce bir şema notu yazmanı öneririm: seni ne düşürdü?</p>
+    <button class="btn btn-outline btn-block" onclick="App.resetWithSchema()">📝 Şema Notu Yaz + Sıfırla</button>
+    <button class="btn btn-danger btn-block mt" onclick="App.confirmReset()">Sadece Sıfırla</button>
+    <button class="btn btn-outline btn-block mt" onclick="App.closeModal('resetModal')">Vazgeç — Devam Ediyorum 💪</button>
+  </div>
+</div>
+
+<script src="app.js"></script>
+<script>
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js').catch(function(){});
+}
+</script>
+</body>
+</html>
