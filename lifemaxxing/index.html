@@ -98,8 +98,24 @@
         <div class="epic-line" id="dailyQuote"></div>
       </div>
 
-      <!-- ANA GÖREVLER: en üstte -->
-      <div class="section-title">🎯 Ana Görevler <span class="hint">(en önemli 5 · +50 XP · sürükleyerek sırala)</span></div>
+      <!-- GERİ SAYIMLAR -->
+      <div id="countdownRow" class="countdown-row"></div>
+
+      <!-- TEK SEFERLİK GÖREVLER -->
+      <div class="section-title">📌 Tek Seferlik <span class="hint">(bugünün ekstra işleri)</span></div>
+      <div class="add-row">
+        <input id="oneoffInput" placeholder="Örn: Göz doktorundan randevu al" maxlength="80">
+        <select id="oneoffXp" class="xp-select">
+          <option value="10">+10</option>
+          <option value="20" selected>+20</option>
+          <option value="50">+50</option>
+        </select>
+        <button class="btn btn-gold" onclick="App.addOneoff()">＋</button>
+      </div>
+      <div id="oneoffList" class="quest-list"></div>
+
+      <!-- ANA GÖREVLER -->
+      <div class="section-title">🎯 Ana Görevler <span class="hint">(en önemli 5 · sürükleyerek sırala · basılı tut = düzenle)</span></div>
       <div id="mainQuests" class="quest-list"></div>
 
       <button class="btn btn-night btn-block mt" onclick="App.openNight()">🌙 Günü Kapat — Kaydırarak Değerlendir</button>
@@ -115,6 +131,10 @@
       <!-- SERBEST GÖREVLER -->
       <div class="section-title">🏹 Serbest Görevler <span class="hint">(devamlılık yükü yok — yapınca işaretle)</span></div>
       <div id="freeQuests" class="quest-list collapsed-list"></div>
+
+      <!-- PASİF / NADİR GÖREVLER -->
+      <button id="hiddenToggle" class="btn btn-outline btn-block mt" onclick="App.toggleHiddenList()">＋ Diğer (pasif görevler)</button>
+      <div id="hiddenQuests" class="quest-list hidden"></div>
     </section>
 
     <!-- ===== GÖREVLER (tümü / düzenleme / sıralama) ===== -->
@@ -138,7 +158,9 @@
       <div class="section-title">📜 Savaş Günlüğü</div>
       <div class="tab-row">
         <button class="tab active" id="tabJournal" onclick="App.journalTab('journal')">Günlük</button>
-        <button class="tab" id="tabSchema" onclick="App.journalTab('schema')">Şema Notları</button>
+        <button class="tab" id="tabBooks" onclick="App.journalTab('books')">📖 Kitaplık</button>
+        <button class="tab" id="tabSchema" onclick="App.journalTab('schema')">Şema</button>
+        <button class="tab" id="tabBudget" onclick="App.journalTab('budget')">💰 Bütçe</button>
       </div>
       <div id="journalPane">
         <textarea id="journalInput" rows="3" placeholder="Bugün neler oldu, savaşçı?"></textarea>
@@ -149,6 +171,25 @@
         <p class="hint-block">Kriz anlarında tuttuğun şema notları. Desenleri burada gör: hangi tetikleyici tekrar ediyor?</p>
         <button class="btn btn-outline btn-block" onclick="App.openCrisis(3)">＋ Yeni Şema Notu</button>
         <div id="schemaEntries"></div>
+      </div>
+      <div id="booksPane" class="hidden">
+        <p class="hint-block">Dinlediğin kitaplar ve aklında kalanlar. Kaydedince "Sesli kitap" görevi otomatik tiklenir.</p>
+        <input id="bookTitle" placeholder="Kitap adı" maxlength="80">
+        <textarea id="bookSummary" rows="3" placeholder="Özet / aklımda kalanlar..."></textarea>
+        <button class="btn btn-gold btn-block" onclick="App.saveBook()">📖 Kitaplığa Ekle</button>
+        <div id="bookEntries"></div>
+      </div>
+      <div id="budgetPane" class="hidden">
+        <div id="budgetSummary"></div>
+        <div class="add-row">
+          <input id="expDesc" placeholder="Açıklama (örn: Market)" maxlength="60">
+          <input id="expAmount" type="number" step="0.01" placeholder="₺" class="amount-input">
+        </div>
+        <div class="row-2">
+          <button class="btn btn-danger" onclick="App.addExpense('gider')">− Gider</button>
+          <button class="btn btn-gold" onclick="App.addExpense('gelir')">＋ Gelir</button>
+        </div>
+        <div id="expenseList"></div>
       </div>
     </section>
 
@@ -181,6 +222,18 @@
       <div id="statsGrid" class="stats-grid"></div>
       <div class="section-title">🏆 Başarımlar</div>
       <div id="achievements" class="ach-grid"></div>
+      <div class="section-title">📌 Başarım Geçmişi <span class="hint">(tamamlanan tek seferlikler)</span></div>
+      <div id="oneoffHistory"></div>
+      <div class="section-title">⚙️ Ayarlar</div>
+      <div class="card">
+        <label>💬 Motivasyon sözleri kaynağı</label>
+        <label class="check-row"><input type="checkbox" id="setMoti" checked onchange="App.setQuoteSource()"> 🔥 Motivasyon & İrade</label>
+        <label class="check-row"><input type="checkbox" id="setQuran" onchange="App.setQuoteSource()"> ☪️ Kur'an ayetleri</label>
+        <label class="check-row"><input type="checkbox" id="setBible" onchange="App.setQuoteSource()"> ✝️ İncil ayetleri</label>
+        <label class="mt">👑 Kral Görev <span class="hint">(bu sayaç sıfırlanırsa TÜM sayaçlar sıfırlanır)</span></label>
+        <select id="setKing" onchange="App.setKing(this.value)"></select>
+        <button class="btn btn-danger btn-block mt" onclick="App.resetAllTimers()">⚠️ Tüm Sayaçları Sıfırla</button>
+      </div>
       <div class="section-title">🧷 Widget Modu</div>
       <p class="hint-block">Bir sayacı tam ekran "widget" olarak aç, telefonunun ana ekranına bu uygulamayı ekle (Safari/Chrome → Paylaş → Ana Ekrana Ekle). Gerçek iOS/Android widget'ları App Store sürümünde gelecek.</p>
       <div id="widgetPicker"></div>
@@ -254,12 +307,17 @@
       <option value="weekly-1">Haftada 1</option>
       <option value="weekly-2">Haftada 2</option>
       <option value="weekly-3">Haftada 3</option>
+      <option value="weekly-4">Haftada 4</option>
       <option value="weekly-5">Haftada 5</option>
+      <option value="weekly-6">Haftada 6</option>
       <option value="monthly-1">Ayda 1</option>
       <option value="free">Serbest (arada bir — yük yok)</option>
     </select>
+    <label>Puan (XP) <span class="hint">— boş bırak: otomatik (Ana 50, serbest 15, normal 10)</span></label>
+    <input id="hfXp" type="number" min="1" max="500" placeholder="otomatik">
     <label class="check-row"><input type="checkbox" id="hfMain"> ⭐ Ana Görev (en fazla 5)</label>
     <label class="check-row"><input type="checkbox" id="hfTimer"> ⏱️ Gün sayacı olsun (Asıl Savaş — NoFap gibi)</label>
+    <label class="check-row"><input type="checkbox" id="hfHidden"> 🕶️ Pasif görev (ana listede gizli — "Diğer"e basınca görünür)</label>
     <div class="row-2 mt">
       <button class="btn btn-gold" onclick="App.saveHabitForm()">💾 Kaydet</button>
       <button class="btn btn-outline" onclick="App.closeModal('habitModal')">Vazgeç</button>
@@ -297,6 +355,53 @@
   </div>
 </div>
 
+<!-- ============ SİGARA SAYACI ============ -->
+<div id="cigModal" class="modal hidden">
+  <div class="modal-inner">
+    <h3>🚬 Sigara Takibi</h3>
+    <p class="hint-block">Bugün kaç adet içtin? <b>0 girersen</b> "Sigara içmemek" görevi otomatik ✅ olur.</p>
+    <div class="cig-counter">
+      <button class="cig-btn" onclick="App.cigAdjust(-1)">−</button>
+      <span id="cigCount" class="cig-num">0</span>
+      <button class="cig-btn" onclick="App.cigAdjust(1)">＋</button>
+    </div>
+    <div id="cigWeek"></div>
+    <div class="row-2 mt">
+      <button class="btn btn-gold" onclick="App.saveCig()">💾 Kaydet</button>
+      <button class="btn btn-outline" onclick="App.closeModal('cigModal')">Kapat</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ SAYAÇ BAŞLANGICI (manuel giriş) ============ -->
+<div id="startModal" class="modal hidden">
+  <div class="modal-inner">
+    <h3>⏱️ Sayaç Başlangıcını Ayarla</h3>
+    <p class="hint-block" id="startText">Son sıfırlanmanın gerçek tarih ve saatini gir — sayaç oradan itibaren sayar.</p>
+    <label>Tarih ve saat</label>
+    <input id="startInput" type="datetime-local">
+    <div class="row-2 mt">
+      <button class="btn btn-gold" onclick="App.saveStart()">💾 Kaydet</button>
+      <button class="btn btn-outline" onclick="App.closeModal('startModal')">Vazgeç</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ GERİ SAYIM ============ -->
+<div id="countdownModal" class="modal hidden">
+  <div class="modal-inner">
+    <h3>⏳ Geri Sayım Ekle</h3>
+    <label>Ne için? (örn: YDS Sınavı)</label>
+    <input id="cdName" maxlength="40" placeholder="Hedef adı">
+    <label>Hedef tarih</label>
+    <input id="cdDate" type="date">
+    <div class="row-2 mt">
+      <button class="btn btn-gold" onclick="App.saveCountdown()">⏳ Ekle</button>
+      <button class="btn btn-outline" onclick="App.closeModal('countdownModal')">Vazgeç</button>
+    </div>
+  </div>
+</div>
+
 <!-- ============ EKRAN SÜRESİ ============ -->
 <div id="screenModal" class="modal hidden">
   <div class="modal-inner">
@@ -306,7 +411,10 @@
     <input id="scMinutes" type="number" min="0" placeholder="örn: 95">
     <label>Günlük hedef (dakika)</label>
     <input id="scGoal" type="number" min="0">
+    <label>📸 Ekran Süresi ekran görüntüsü ekle <span class="hint">(kanıt arşivi — liste halinde saklanır)</span></label>
+    <input type="file" id="scPhoto" accept="image/*" onchange="App.addScreenshot(event)">
     <div id="scWeek"></div>
+    <div id="scPics"></div>
     <div class="row-2 mt">
       <button class="btn btn-gold" onclick="App.saveScreen()">💾 Kaydet</button>
       <button class="btn btn-outline" onclick="App.closeModal('screenModal')">Kapat</button>

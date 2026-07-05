@@ -74,6 +74,52 @@ const QUOTES = [
   'Savaşçı planlarını gizler, zaferlerini gösterir.'
 ];
 
+// Ayarlardan seçilebilen söz havuzları
+const QURAN_QUOTES = [
+  '"Şüphesiz Allah sabredenlerle beraberdir." — Bakara 153',
+  '"Nefsini arındıran kurtuluşa ermiştir." — Şems 9',
+  '"Bizim uğrumuzda cihad edenleri elbette yollarımıza eriştiririz." — Ankebut 69',
+  '"Kalpler ancak Allah\'ı anmakla huzur bulur." — Ra\'d 28',
+  '"Mümin erkeklere söyle, gözlerini haramdan sakınsınlar ve iffetlerini korusunlar." — Nur 30',
+  '"Şüphesiz zorlukla beraber bir kolaylık vardır." — İnşirah 6',
+  '"Allah bir kimseyi ancak gücünün yettiği şeyle yükümlü kılar." — Bakara 286',
+  '"Kim Allah\'a karşı gelmekten sakınırsa, Allah ona bir çıkış yolu açar." — Talak 2',
+  '"Sabret! Senin sabrın ancak Allah\'ın yardımıyladır." — Nahl 127',
+  '"Nefis, kötülüğü şiddetle emreder; ancak Rabbimin merhamet ettiği hariç." — Yusuf 53'
+];
+const BIBLE_QUOTES = [
+  '"Tanrı, dayanabileceğinizden fazlasıyla denenmenize izin vermez." — 1. Korintliler 10:13',
+  '"Ruh\'un meyvesi sevgi, sevinç, esenlik, sabır ve özdenetimdir." — Galatyalılar 5:22-23',
+  '"Beni güçlendirenin aracılığıyla her şeyi yapabilirim." — Filipililer 4:13',
+  '"Bu çağın gidişine uymayın; düşüncenizin yenilenmesiyle değişin." — Romalılar 12:2',
+  '"Genç insan yolunu nasıl temiz tutar? Senin sözünü tutmakla." — Mezmur 119:9',
+  '"Denenmeye dayanan kişiye ne mutlu!" — Yakup 1:12',
+  '"Bedeniniz, Kutsal Ruh\'un tapınağıdır." — 1. Korintliler 6:19',
+  '"Uyanık durun, dua edin; ruh isteklidir ama beden güçsüzdür." — Matta 26:41'
+];
+const CONGRATS = [
+  'Tebrikler! {d} gündür ayaktasın — bu gerçek bir irade zaferi. 🏆',
+  '{d} gün! Eski sen bunu hayal bile edemezdi. Devam! ⚔️',
+  'Her sabah uyandığında {d} günlük bir kale inşa etmiş oluyorsun. 🏰',
+  '{d} gündür dalgaları kırıyorsun. Deniz sakinleşiyor, kaptan güçleniyor. 🌊',
+  'Vücudun ve zihnin sana teşekkür ediyor: {d} gün temiz enerji. ⚡'
+];
+// Seçili kaynaklardan birleşik söz havuzu
+function quotePool() {
+  const q = S.quoteSources || { moti: true };
+  let pool = [];
+  if (q.moti !== false) pool = pool.concat(QUOTES);
+  if (q.quran) pool = pool.concat(QURAN_QUOTES);
+  if (q.bible) pool = pool.concat(BIBLE_QUOTES);
+  return pool.length ? pool : QUOTES;
+}
+function dayOfYear() {
+  const now = new Date();
+  return Math.floor((now - new Date(now.getFullYear(), 0, 0)) / 86400000);
+}
+
+const PRAYER_NAMES = [['sabah', 'Sabah'], ['ogle', 'Öğle'], ['ikindi', 'İkindi'], ['aksam', 'Akşam'], ['yatsi', 'Yatsı']];
+
 const CRISIS_QUOTES = [
   'Bu his geçici. Pişmanlık daha uzun sürer, gurur ise sonsuza dek kalır.',
   '15 dakika dayan. Dalga her zaman geri çekilir.',
@@ -165,7 +211,17 @@ function defaultState() {
     study: { items: { books: [], notes: [], lessons: [] }, log: {}, running: null },
     // Ekran süresi
     screenLog: {},      // { 'YYYY-MM-DD': dakika }
-    screenGoal: 120
+    screenGoal: 120,
+    screenPics: [],     // { d, img } — küçültülmüş ekran görüntüleri
+    // ADHD sürümü
+    prayers: {},        // { 'YYYY-MM-DD': { sabah,ogle,ikindi,aksam,yatsi: bool, kaza: int } }
+    cigs: {},           // { 'YYYY-MM-DD': adet }
+    books: [],          // { ts, title, summary }
+    oneoffs: [],        // { id, name, xp, created, done, doneTs }
+    expenses: [],       // { ts, desc, amount, type: 'gider'|'gelir' }
+    countdowns: [],     // { id, name, target }
+    kingHabit: '',      // bu sayaç sıfırlanırsa tüm sayaçlar sıfırlanır
+    quoteSources: { moti: true, quran: false, bible: false }
   };
 }
 
@@ -186,12 +242,24 @@ function load() {
     const raw = localStorage.getItem('lifemaxx');
     S = raw ? Object.assign(defaultState(), JSON.parse(raw)) : defaultState();
     // eski sürümden yükseltme
-    if (!S.study) S.study = defaultState().study;
-    if (!S.screenLog) S.screenLog = {};
+    const d = defaultState();
+    for (const k of ['study', 'screenLog', 'screenPics', 'prayers', 'cigs', 'books', 'oneoffs', 'expenses', 'countdowns', 'quoteSources'])
+      if (S[k] == null) S[k] = d[k];
     if (!S.screenGoal) S.screenGoal = 120;
+    if (S.kingHabit == null) S.kingHabit = '';
   } catch (e) { S = defaultState(); }
 }
-function save() { localStorage.setItem('lifemaxx', JSON.stringify(S)); }
+function save() {
+  try { localStorage.setItem('lifemaxx', JSON.stringify(S)); }
+  catch (e) {
+    // kota dolduysa en eski ekran görüntülerini at ve tekrar dene
+    if (S.screenPics && S.screenPics.length) {
+      S.screenPics.splice(0, Math.ceil(S.screenPics.length / 2));
+      try { localStorage.setItem('lifemaxx', JSON.stringify(S)); return; } catch (e2) {}
+    }
+    alert('Depolama alanı doldu — eski ekran görüntülerini silmeyi dene.');
+  }
+}
 
 // ---------- Rozet & sayaç ----------
 function rankForDays(days) {
@@ -215,11 +283,22 @@ function timerClock(id) {
 
 // ---------- XP & Seviye ----------
 // Ana Görevler (top 5) 50 XP — seviye atlamak için hem XP hem Ana Görev tamamlaması ŞART.
-function xpForHabit(h) { return h.main ? XP_MAIN : (h.freq === 'free' ? XP_FREE : XP_REGULAR); }
+function xpForHabit(h) {
+  if (h.xp) return h.xp; // kullanıcı özel puan verdiyse o geçerli
+  return h.main ? XP_MAIN : (h.freq === 'free' ? XP_FREE : XP_REGULAR);
+}
 function totalXP() {
   let xp = 0;
   for (const h of S.habits) xp += Object.keys(S.done[h.id] || {}).length * xpForHabit(h);
   xp += S.crisisSurvived * XP_CRISIS + S.schemas.length * XP_SCHEMA;
+  // tek seferlik görevler
+  for (const o of S.oneoffs) if (o.done) xp += (o.xp || 20);
+  // namaz: kaza +5, tam gün (5/5) +25 bonus
+  for (const k in S.prayers) {
+    const p = S.prayers[k];
+    xp += (p.kaza || 0) * 5;
+    if (PRAYER_NAMES.every(([key]) => p[key])) xp += 25;
+  }
   return xp;
 }
 function mainDoneCount() {
@@ -335,6 +414,14 @@ function tickToday(id) {
 // Özel görevler
 function studyHabit() { return S.habits.find(h => h.id === 'h9') || S.habits.find(h => h.name.toLowerCase().includes('sınav')); }
 function screenHabit() { return S.habits.find(h => h.name.toLowerCase().includes('ekran')); }
+function prayerHabit() { return S.habits.find(h => h.name.toLowerCase().includes('namaz')); }
+function cigHabit() { return S.habits.find(h => h.name.toLowerCase().includes('sigara')); }
+function bookHabit() { return S.habits.find(h => h.name.toLowerCase().includes('sesli kitap')); }
+function todayPrayers() {
+  const k = dateKey();
+  if (!S.prayers[k]) S.prayers[k] = { kaza: 0 };
+  return S.prayers[k];
+}
 
 // ---------- İstatistik ----------
 function stats() {
@@ -382,11 +469,35 @@ function renderTop() {
 }
 
 // ----- Ana sayfa -----
+let hiddenListOpen = false;
 function renderHome() {
-  $('dailyQuote').textContent = '“' + QUOTES[new Date().getDate() % QUOTES.length] + '”';
+  const pool = quotePool();
+  $('dailyQuote').textContent = '“' + pool[dayOfYear() % pool.length] + '”';
+
+  // Geri sayımlar
+  $('countdownRow').innerHTML = S.countdowns.map(c => {
+    const days = Math.ceil((c.target - Date.now()) / 86400000);
+    return `<div class="cd-chip ${days < 0 ? 'past' : ''}">
+      <span class="cd-days">${days < 0 ? '✓' : days}</span>
+      <span class="cd-name">${esc(c.name)}${days >= 0 ? ' · gün kaldı' : ' · geçti'}</span>
+      <button class="cd-del" onclick="App.delCountdown('${c.id}')">✕</button>
+    </div>`;
+  }).join('') + `<button class="cd-chip cd-add" onclick="App.openCountdownForm()">⏳ ＋ Geri sayım</button>`;
+
+  // Tek seferlik görevler
+  const pending = S.oneoffs.filter(o => !o.done);
+  $('oneoffList').innerHTML = pending.map(o => `
+    <div class="quest oneoff">
+      <button class="q-check" onclick="App.doneOneoff('${o.id}')">✓</button>
+      <div class="q-body">
+        <div class="q-name">${esc(o.name)}</div>
+        <div class="q-meta">Tek seferlik · +${o.xp} XP</div>
+      </div>
+      <button class="q-edit" onclick="App.delOneoff('${o.id}')">🗑️</button>
+    </div>`).join('');
 
   // Ana görevler (en üstte, sürüklenebilir)
-  const mains = S.habits.filter(h => h.main).sort((a, b) => a.order - b.order);
+  const mains = S.habits.filter(h => h.main && !h.hidden).sort((a, b) => a.order - b.order);
   $('mainQuests').innerHTML = mains.map(h => questHTML(h, true, true)).join('') ||
     '<p class="hint-block">Henüz ana görev yok. Görevler sayfasından ⭐ ile seç.</p>';
   attachDrag($('mainQuests'));
@@ -394,15 +505,24 @@ function renderHome() {
   // Sayaç kartları
   $('mainTimers').innerHTML = S.habits.filter(h => h.timer).map(h => timerCardHTML(h)).join('');
 
-  // Bugün beklenenler (ana olmayan)
-  const today = S.habits.filter(h => !h.main && !h.timer && h.freq !== 'free' && (neededToday(h) || isDoneToday(h)))
+  // Bugün beklenenler (ana olmayan, gizli olmayan)
+  const today = S.habits.filter(h => !h.main && !h.timer && !h.hidden && h.freq !== 'free' && (neededToday(h) || isDoneToday(h)))
     .sort((a, b) => a.order - b.order);
   $('todayQuests').innerHTML = today.map(h => questHTML(h)).join('') ||
     '<p class="hint-block">Bugünlük her şey tamam. 🏆</p>';
 
-  // Serbest görevler
-  const free = S.habits.filter(h => h.freq === 'free' && !h.timer).sort((a, b) => a.order - b.order);
+  // Serbest görevler (gizli olmayan)
+  const free = S.habits.filter(h => h.freq === 'free' && !h.timer && !h.hidden).sort((a, b) => a.order - b.order);
   $('freeQuests').innerHTML = free.map(h => questHTML(h)).join('');
+
+  // Pasif (gizli) görevler — sadece istenince görünür
+  const hid = S.habits.filter(h => h.hidden).sort((a, b) => a.order - b.order);
+  $('hiddenToggle').textContent = (hiddenListOpen ? '− Gizle' : '＋ Diğer') + ' (' + hid.length + ' pasif görev)';
+  $('hiddenToggle').classList.toggle('hidden', !hid.length);
+  $('hiddenQuests').classList.toggle('hidden', !hiddenListOpen);
+  if (hiddenListOpen) $('hiddenQuests').innerHTML = hid.map(h => questHTML(h)).join('');
+
+  attachLongPress($('page-home'));
 }
 
 function timerCardHTML(h) {
@@ -434,19 +554,37 @@ function timerCardHTML(h) {
     <div class="timer-badge-row"><span class="b-emoji">${rank.e}</span> ${rank.n}
       ${nextRank ? `<span class="timer-next">→ ${nextRank.n} (${next} gün)</span>` : '<span class="timer-next">MAX 👑</span>'}
     </div>
+    ${isNofap && days > 0 ? `<p class="congrats-line">${esc(nofapCongrats(days))}</p>` : ''}
     <div class="row-2">
       ${isNofap ? '<button class="btn btn-danger" onclick="App.openCrisis()">🆘 Kriz</button>' : ''}
       ${isStudy ? '<button class="btn btn-gold" onclick="App.go(\'study\')">📚 Çalışma Merkezi</button>' : ''}
+      <button class="btn btn-outline" onclick="App.openStart('${h.id}')">✏️</button>
       <button class="btn btn-outline" onclick="App.askReset('${h.id}')">↺</button>
       <button class="btn btn-outline" onclick="App.showWidget('${h.id}')">🧷</button>
     </div>
   </div>`;
 }
 
+// NoFap tebrik + seçili kaynaklardan söz
+function nofapCongrats(days) {
+  const c = CONGRATS[days % CONGRATS.length].replace('{d}', days);
+  const pool = quotePool();
+  return c + ' ' + pool[(dayOfYear() + days) % pool.length];
+}
+
 function questHTML(h, isMain, draggable) {
   const done = isDoneToday(h);
   let meta = FREQ_LABEL[h.freq] || '';
-  if (h.freq.startsWith('weekly-')) meta += ` · bu hafta ${countInWeek(h)}/${h.freq.split('-')[1]}`;
+  let weekComplete = false, boxes = '';
+  if (h.freq.startsWith('weekly-')) {
+    const n = +h.freq.split('-')[1], c = countInWeek(h);
+    weekComplete = c >= n;
+    // haftalık hedef kutucukları — dolunca altın kutlama
+    boxes = `<div class="wk-boxes">` +
+      Array.from({ length: n }, (_, i) => `<span class="wk-box ${i < c ? 'filled' : ''}"></span>`).join('') +
+      (weekComplete ? '<span class="wk-done">🏆 Hafta tamam!</span>' : '') + `</div>`;
+    meta += ` · bu hafta ${c}/${n}`;
+  }
   else if (h.freq.startsWith('monthly-')) meta += ` · bu ay ${countInMonth(h)}/${h.freq.split('-')[1]}`;
   else if (h.freq === 'free') {
     const ld = lastDone(h);
@@ -454,17 +592,37 @@ function questHTML(h, isMain, draggable) {
   }
   meta += ' · +' + xpForHabit(h) + ' XP';
   const sl = streakLabel(h);
-  const sh = studyHabit(), sch = screenHabit();
+  const sh = studyHabit(), sch = screenHabit(), cg = cigHabit(), bk = bookHabit();
   const extra =
     (sh && h.id === sh.id ? `<button class="q-tool" onclick="App.go('study')">📚</button>` : '') +
-    (sch && h.id === sch.id ? `<button class="q-tool" onclick="App.openScreen()">📵</button>` : '');
+    (sch && h.id === sch.id ? `<button class="q-tool" onclick="App.openScreen()">📵</button>` : '') +
+    (cg && h.id === cg.id ? `<button class="q-tool" onclick="App.openCig()">🚬</button>` : '') +
+    (bk && h.id === bk.id ? `<button class="q-tool" onclick="App.goBooks()">📖</button>` : '');
+  // Namaz: 5 vakit + kaza çipleri
+  let prayerRow = '';
+  const ph = prayerHabit();
+  if (ph && h.id === ph.id) {
+    const p = S.prayers[dateKey()] || { kaza: 0 };
+    const full = PRAYER_NAMES.every(([k]) => p[k]);
+    prayerRow = `<div class="prayer-row">` +
+      PRAYER_NAMES.map(([k, label]) =>
+        `<button class="pr-chip ${p[k] ? 'on' : ''}" onclick="App.togglePrayer('${k}')">${label}</button>`).join('') +
+      `<button class="pr-chip pr-kaza" onclick="App.addKaza()">＋Kaza${p.kaza ? ' (' + p.kaza + ')' : ''}</button>` +
+      (full ? '<span class="wk-done">🕌 5/5 Maşallah! +25 XP</span>' : '') + `</div>`;
+  }
+  // Sigara: bugünkü adet göster
+  if (cg && h.id === cg.id) {
+    const c = S.cigs[dateKey()];
+    if (c != null) meta += c === 0 ? ' · bugün 0 🎉' : ' · bugün ' + c + ' adet';
+  }
   return `
-  <div class="quest ${done ? 'done' : ''} ${isMain ? 'main-quest' : ''}" data-id="${h.id}">
+  <div class="quest ${done ? 'done' : ''} ${isMain ? 'main-quest' : ''} ${weekComplete ? 'week-complete' : ''}" data-id="${h.id}" data-press="${h.id}">
     ${draggable ? `<span class="drag-handle" data-drag="${h.id}">⠿</span>` : ''}
     <button class="q-check" onclick="App.toggle('${h.id}')">✓</button>
     <div class="q-body">
       <div class="q-name">${isMain ? '⭐ ' : ''}${esc(h.name)}</div>
       <div class="q-meta">${esc(meta)}</div>
+      ${boxes}${prayerRow}
     </div>
     ${extra}
     ${sl ? `<span class="q-streak">${sl}</span>` : ''}
@@ -491,8 +649,8 @@ function renderAllHabits() {
       el.innerHTML = `
         <span class="drag-handle" data-drag="${h.id}">⠿</span>
         <div class="q-body">
-          <div class="q-name">${esc(h.name)} ${h.timer ? '⏱️' : ''}</div>
-          <div class="q-meta">${FREQ_LABEL[h.freq]} · +${xpForHabit(h)} XP ${sl ? '· ' + sl : ''}</div>
+          <div class="q-name">${esc(h.name)} ${h.timer ? '⏱️' : ''} ${h.hidden ? '🕶️' : ''}</div>
+          <div class="q-meta">${FREQ_LABEL[h.freq]} · +${xpForHabit(h)} XP ${sl ? '· ' + sl : ''}${h.hidden ? ' · pasif' : ''}</div>
         </div>
         <button class="q-star ${h.main ? 'on' : ''}" onclick="App.toggleMain('${h.id}')">⭐</button>
         <button class="q-edit" onclick="App.openHabitForm('${h.id}')">✏️</button>`;
@@ -571,8 +729,48 @@ let journalMode = 'journal';
 function renderJournal() {
   $('tabJournal').classList.toggle('active', journalMode === 'journal');
   $('tabSchema').classList.toggle('active', journalMode === 'schema');
+  $('tabBooks').classList.toggle('active', journalMode === 'books');
+  $('tabBudget').classList.toggle('active', journalMode === 'budget');
   $('journalPane').classList.toggle('hidden', journalMode !== 'journal');
   $('schemaPane').classList.toggle('hidden', journalMode !== 'schema');
+  $('booksPane').classList.toggle('hidden', journalMode !== 'books');
+  $('budgetPane').classList.toggle('hidden', journalMode !== 'budget');
+
+  // Kitaplık
+  $('bookEntries').innerHTML = S.books.slice().reverse().map((b, ri) => {
+    const i = S.books.length - 1 - ri;
+    return `<div class="entry">
+      <button class="e-del" onclick="App.delBook(${i})">🗑️</button>
+      <div class="e-date">${fmtDate(b.ts)}</div>
+      <div class="e-text"><b>📖 ${esc(b.title)}</b>${b.summary ? '<br>' + esc(b.summary) : ''}</div>
+    </div>`;
+  }).join('') || '<p class="hint-block">Henüz kitap yok.</p>';
+
+  // Bütçe
+  const now = new Date();
+  const pre = now.getFullYear() + '-' + pad(now.getMonth() + 1);
+  let gelir = 0, gider = 0;
+  for (const e of S.expenses) {
+    if (dateKey(new Date(e.ts)).startsWith(pre)) {
+      if (e.type === 'gelir') gelir += e.amount; else gider += e.amount;
+    }
+  }
+  const net = gelir - gider;
+  $('budgetSummary').innerHTML = `
+    <div class="stats-grid budget-grid">
+      <div class="stat-tile"><div class="st-num" style="color:var(--green)">+${gelir.toFixed(0)}₺</div><div class="st-label">Bu ay gelir</div></div>
+      <div class="stat-tile"><div class="st-num" style="color:var(--red)">−${gider.toFixed(0)}₺</div><div class="st-label">Bu ay gider</div></div>
+      <div class="stat-tile" style="grid-column:1/-1"><div class="st-num">${net >= 0 ? '+' : ''}${net.toFixed(0)}₺</div><div class="st-label">Net birikim ${net >= 0 ? '📈' : '📉'}</div></div>
+    </div>`;
+  $('expenseList').innerHTML = S.expenses.slice().reverse().map((e, ri) => {
+    const i = S.expenses.length - 1 - ri;
+    return `<div class="exp-row ${e.type}">
+      <span class="exp-desc">${esc(e.desc)}</span>
+      <span class="exp-date">${new Date(e.ts).toLocaleDateString('tr-TR', { day: 'numeric', month: 'short' })}</span>
+      <span class="exp-amount">${e.type === 'gelir' ? '+' : '−'}${e.amount.toFixed(2)}₺</span>
+      <button class="e-del" onclick="App.delExpense(${i})">🗑️</button>
+    </div>`;
+  }).join('') || '<p class="hint-block">Henüz kayıt yok. Harcamalarını ve gelirlerini ekle, net birikimini gör.</p>';
 
   $('journalEntries').innerHTML = S.journal.slice().reverse().map((j, ri) => {
     const i = S.journal.length - 1 - ri;
@@ -651,6 +849,24 @@ function renderProfile() {
     <button class="widget-pick-btn" onclick="App.showWidget('${h.id}')">
       <span>⏱️ ${esc(h.name)}</span><span>${timerDays(h.id)} gün →</span>
     </button>`).join('');
+
+  // Başarım geçmişi (tamamlanan tek seferlikler)
+  const doneOffs = S.oneoffs.filter(o => o.done).sort((a, b) => b.doneTs - a.doneTs);
+  $('oneoffHistory').innerHTML = doneOffs.map(o => `
+    <div class="exp-row gelir">
+      <span class="exp-desc">🏅 ${esc(o.name)}</span>
+      <span class="exp-date">${new Date(o.doneTs).toLocaleDateString('tr-TR', { day: 'numeric', month: 'short' })}</span>
+      <span class="exp-amount">+${o.xp} XP</span>
+    </div>`).join('') || '<p class="hint-block">Henüz tamamlanan tek seferlik görev yok.</p>';
+
+  // Ayarlar
+  const q = S.quoteSources;
+  $('setMoti').checked = q.moti !== false;
+  $('setQuran').checked = !!q.quran;
+  $('setBible').checked = !!q.bible;
+  $('setKing').innerHTML = '<option value="">— Yok —</option>' +
+    S.habits.filter(h => h.timer).map(h =>
+      `<option value="${h.id}" ${S.kingHabit === h.id ? 'selected' : ''}>👑 ${esc(h.name)}</option>`).join('');
 }
 
 // ----- Widget -----
@@ -777,6 +993,8 @@ const App = {
     $('hfFreq').value = h ? h.freq : 'daily';
     $('hfMain').checked = h ? h.main : false;
     $('hfTimer').checked = h ? !!h.timer : false;
+    $('hfHidden').checked = h ? !!h.hidden : false;
+    $('hfXp').value = h && h.xp ? h.xp : '';
     $('hfDelete').classList.toggle('hidden', !id);
     $('habitModal').classList.remove('hidden');
   },
@@ -788,10 +1006,13 @@ const App = {
       const others = S.habits.filter(x => x.main && x.id !== App.editingHabit).length;
       if (others >= 5) { alert('En fazla 5 Ana Görev olabilir.'); return; }
     }
+    const customXp = parseInt($('hfXp').value, 10);
     if (App.editingHabit) {
       const h = S.habits.find(x => x.id === App.editingHabit);
       h.name = name; h.cat = $('hfCategory').value; h.freq = $('hfFreq').value;
       h.main = main;
+      h.hidden = $('hfHidden').checked;
+      h.xp = customXp > 0 ? customXp : undefined;
       const wantTimer = $('hfTimer').checked;
       if (wantTimer && !h.timer) S.timers[h.id] = S.timers[h.id] || Date.now();
       h.timer = wantTimer;
@@ -800,6 +1021,8 @@ const App = {
       const h = {
         id, name, cat: $('hfCategory').value, freq: $('hfFreq').value,
         main, timer: $('hfTimer').checked,
+        hidden: $('hfHidden').checked,
+        xp: customXp > 0 ? customXp : undefined,
         order: Math.max(0, ...S.habits.map(x => x.order)) + 1
       };
       if (h.timer) S.timers[id] = Date.now();
@@ -829,11 +1052,7 @@ const App = {
   },
   confirmReset() {
     if (resetTargetId) {
-      if (resetTargetId === 'h1') {
-        const d = timerDays('h1');
-        if (d > S.bestNofap) S.bestNofap = d;
-      }
-      S.timers[resetTargetId] = Date.now();
+      doTimerReset(resetTargetId);
       save();
     }
     App.closeModal('resetModal');
@@ -885,11 +1104,7 @@ const App = {
     S.schemas.push(s);
     ['schTrigger', 'schThought', 'schFeeling', 'schAction'].forEach(id => $(id).value = '');
     if (crisisResetTarget) {
-      if (crisisResetTarget === 'h1') {
-        const d = timerDays('h1');
-        if (d > S.bestNofap) S.bestNofap = d;
-      }
-      S.timers[crisisResetTarget] = Date.now();
+      doTimerReset(crisisResetTarget);
       crisisResetTarget = null;
       save();
       $('crisisVictoryText').textContent = 'Şema notun kaydedildi ve sayaç sıfırlandı. Düşen kalkar — yolculuk devam ediyor. ⚔️';
@@ -909,7 +1124,7 @@ const App = {
 
   // --- Gece değerlendirmesi (kaydırmalı) ---
   openNight() {
-    nightQueue = S.habits.filter(h => !h.timer && h.freq !== 'free' && !isDoneToday(h) && neededToday(h))
+    nightQueue = S.habits.filter(h => !h.timer && !h.hidden && h.freq !== 'free' && !isDoneToday(h) && neededToday(h))
       .sort((a, b) => (b.main ? 1 : 0) - (a.main ? 1 : 0) || a.order - b.order);
     $('nightOverlay').classList.remove('hidden');
     App.renderNight();
@@ -1017,6 +1232,7 @@ const App = {
         <span class="week-min">${min == null ? '—' : min + ' dk ' + (min <= S.screenGoal ? '✅' : '⚠️')}</span></div>`;
     }
     $('scWeek').innerHTML = rows;
+    App.renderScreenPics();
     $('screenModal').classList.remove('hidden');
   },
   saveScreen() {
@@ -1097,8 +1313,251 @@ const App = {
     ev.target.value = '';
   },
 
+  // --- Tek seferlik görevler ---
+  addOneoff() {
+    const name = $('oneoffInput').value.trim();
+    if (!name) return;
+    S.oneoffs.push({ id: 'o' + Date.now(), name, xp: parseInt($('oneoffXp').value, 10) || 20, created: Date.now(), done: false });
+    $('oneoffInput').value = '';
+    save(); renderHome(); renderTop();
+  },
+  doneOneoff(id) {
+    const o = S.oneoffs.find(x => x.id === id);
+    if (!o) return;
+    o.done = true; o.doneTs = Date.now();
+    save(); render();
+  },
+  delOneoff(id) {
+    S.oneoffs = S.oneoffs.filter(x => x.id !== id);
+    save(); renderHome();
+  },
+
+  // --- Pasif görev listesi ---
+  toggleHiddenList() { hiddenListOpen = !hiddenListOpen; renderHome(); },
+
+  // --- Namaz ---
+  togglePrayer(k) {
+    const p = todayPrayers();
+    p[k] = !p[k];
+    const ph = prayerHabit();
+    if (ph) {
+      // en az 1 vakit işaretliyse görev tik, hiçbiri yoksa tiki kaldır
+      const any = PRAYER_NAMES.some(([key]) => p[key]);
+      S.done[ph.id] = S.done[ph.id] || {};
+      if (any) S.done[ph.id][dateKey()] = true;
+      else delete S.done[ph.id][dateKey()];
+    }
+    save(); render();
+  },
+  addKaza() {
+    const p = todayPrayers();
+    p.kaza = (p.kaza || 0) + 1;
+    save(); render();
+  },
+
+  // --- Sigara ---
+  cigTemp: 0,
+  openCig() {
+    App.cigTemp = S.cigs[dateKey()] ?? 0;
+    $('cigCount').textContent = App.cigTemp;
+    let rows = '';
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(); d.setDate(d.getDate() - i);
+      const k = dateKey(d);
+      const c = S.cigs[k];
+      const label = i === 0 ? 'Bugün' : d.toLocaleDateString('tr-TR', { weekday: 'short', day: 'numeric' });
+      rows += `<div class="week-row"><span>${label}</span>
+        <span class="week-min">${c == null ? '—' : (c === 0 ? '0 🎉' : c + ' adet')}</span></div>`;
+    }
+    $('cigWeek').innerHTML = rows;
+    $('cigModal').classList.remove('hidden');
+  },
+  cigAdjust(d) {
+    App.cigTemp = Math.max(0, App.cigTemp + d);
+    $('cigCount').textContent = App.cigTemp;
+  },
+  saveCig() {
+    S.cigs[dateKey()] = App.cigTemp;
+    const ch = cigHabit();
+    if (ch) {
+      S.done[ch.id] = S.done[ch.id] || {};
+      if (App.cigTemp === 0) S.done[ch.id][dateKey()] = true;
+      else delete S.done[ch.id][dateKey()];
+    }
+    save();
+    App.closeModal('cigModal');
+    render();
+  },
+
+  // --- Kitaplık ---
+  goBooks() { journalMode = 'books'; App.go('journal'); },
+  saveBook() {
+    const title = $('bookTitle').value.trim();
+    if (!title) { alert('Kitap adı gerekli.'); return; }
+    S.books.push({ ts: Date.now(), title, summary: $('bookSummary').value.trim() });
+    $('bookTitle').value = ''; $('bookSummary').value = '';
+    const bh = bookHabit();
+    if (bh) tickToday(bh.id);
+    save(); renderJournal();
+  },
+  delBook(i) { if (confirm('Kitap kaydı silinsin mi?')) { S.books.splice(i, 1); save(); renderJournal(); } },
+
+  // --- Bütçe ---
+  addExpense(type) {
+    const desc = $('expDesc').value.trim();
+    const amount = parseFloat($('expAmount').value);
+    if (!desc || !amount || amount <= 0) { alert('Açıklama ve tutar gerekli.'); return; }
+    S.expenses.push({ ts: Date.now(), desc, amount, type });
+    $('expDesc').value = ''; $('expAmount').value = '';
+    save(); renderJournal();
+  },
+  delExpense(i) { S.expenses.splice(i, 1); save(); renderJournal(); },
+
+  // --- Geri sayım ---
+  openCountdownForm() { $('countdownModal').classList.remove('hidden'); },
+  saveCountdown() {
+    const name = $('cdName').value.trim();
+    const date = $('cdDate').value;
+    if (!name || !date) { alert('İsim ve tarih gerekli.'); return; }
+    S.countdowns.push({ id: 'cd' + Date.now(), name, target: new Date(date + 'T23:59').getTime() });
+    $('cdName').value = ''; $('cdDate').value = '';
+    save();
+    App.closeModal('countdownModal');
+    renderHome();
+  },
+  delCountdown(id) {
+    if (!confirm('Geri sayım silinsin mi?')) return;
+    S.countdowns = S.countdowns.filter(c => c.id !== id);
+    save(); renderHome();
+  },
+
+  // --- Sayaç başlangıcını manuel ayarla ---
+  startTargetId: null,
+  openStart(id) {
+    App.startTargetId = id;
+    const h = S.habits.find(x => x.id === id);
+    $('startText').textContent = `"${h.name}" sayacının gerçek başlangıcını gir — son sıfırlanmanın tarihi ve saati.`;
+    const t = new Date(S.timers[id] || Date.now());
+    t.setMinutes(t.getMinutes() - t.getTimezoneOffset());
+    $('startInput').value = t.toISOString().slice(0, 16);
+    $('startModal').classList.remove('hidden');
+  },
+  saveStart() {
+    const v = $('startInput').value;
+    if (!v) return;
+    const ts = new Date(v).getTime();
+    if (isNaN(ts)) { alert('Geçersiz tarih.'); return; }
+    if (ts > Date.now()) { alert('Gelecek bir tarih giremezsin.'); return; }
+    S.timers[App.startTargetId] = ts;
+    save();
+    App.closeModal('startModal');
+    render();
+  },
+
+  // --- Ekran görüntüsü arşivi ---
+  addScreenshot(ev) {
+    const f = ev.target.files[0];
+    if (!f) return;
+    const img = new Image();
+    const url = URL.createObjectURL(f);
+    img.onload = () => {
+      const w = Math.min(480, img.width);
+      const hgt = Math.round(img.height * w / img.width);
+      const cv = document.createElement('canvas');
+      cv.width = w; cv.height = hgt;
+      cv.getContext('2d').drawImage(img, 0, 0, w, hgt);
+      URL.revokeObjectURL(url);
+      S.screenPics.push({ d: dateKey(), img: cv.toDataURL('image/jpeg', 0.55) });
+      while (S.screenPics.length > 30) S.screenPics.shift(); // en fazla 30 kayıt
+      save();
+      App.renderScreenPics();
+    };
+    img.src = url;
+    ev.target.value = '';
+  },
+  renderScreenPics() {
+    $('scPics').innerHTML = S.screenPics.slice().reverse().map((p, ri) => {
+      const i = S.screenPics.length - 1 - ri;
+      return `<div class="sc-pic-row">
+        <img src="${p.img}" onclick="this.classList.toggle('big')" alt="ss">
+        <span>${p.d}${S.screenLog[p.d] != null ? ' · ' + S.screenLog[p.d] + ' dk' : ''}</span>
+        <button class="e-del" onclick="App.delScreenshot(${i})">🗑️</button>
+      </div>`;
+    }).join('');
+  },
+  delScreenshot(i) { S.screenPics.splice(i, 1); save(); App.renderScreenPics(); },
+
+  // --- Ayarlar ---
+  setQuoteSource() {
+    S.quoteSources = { moti: $('setMoti').checked, quran: $('setQuran').checked, bible: $('setBible').checked };
+    save();
+  },
+  setKing(v) { S.kingHabit = v; save(); },
+  resetAllTimers() {
+    if (!confirm('TÜM sayaçlar şimdiden başlatılacak. Emin misin?')) return;
+    const d = timerDays('h1');
+    if (d > S.bestNofap) S.bestNofap = d;
+    for (const h of S.habits) if (h.timer) S.timers[h.id] = Date.now();
+    save(); render();
+  },
+
   closeModal(id) { $(id).classList.add('hidden'); }
 };
+
+// Sayaç sıfırlama (Kral Görev zinciriyle): kral sayaç düşerse tüm sayaçlar düşer
+function doTimerReset(id) {
+  if (id === 'h1') {
+    const d = timerDays('h1');
+    if (d > S.bestNofap) S.bestNofap = d;
+  }
+  S.timers[id] = Date.now();
+  if (S.kingHabit && id === S.kingHabit) {
+    for (const h of S.habits) if (h.timer) S.timers[h.id] = Date.now();
+  }
+}
+
+// Basılı tutunca görev düzenleme (550ms)
+function attachLongPress(root) {
+  root.querySelectorAll('[data-press]').forEach(el => {
+    if (el._lpBound) return;
+    el._lpBound = true;
+    let timer = null;
+    const start = e => {
+      if (e.target.closest('button, .drag-handle, input, .pr-chip')) return;
+      timer = setTimeout(() => {
+        timer = null;
+        if (navigator.vibrate) navigator.vibrate(30);
+        App.openHabitForm(el.dataset.press);
+      }, 550);
+    };
+    const cancel = () => { if (timer) { clearTimeout(timer); timer = null; } };
+    el.addEventListener('pointerdown', start);
+    el.addEventListener('pointermove', cancel);
+    el.addEventListener('pointerup', cancel);
+    el.addEventListener('pointerleave', cancel);
+  });
+}
+
+// Sekmeler arası sağa-sola kaydırma
+const NAV_PAGES = ['home', 'habits', 'badges', 'journal', 'guild'];
+(function initSwipeNav() {
+  let sx = null, sy = null;
+  document.addEventListener('touchstart', e => {
+    if (e.target.closest('.drag-handle, .night-card, .modal, .crisis-overlay, input, textarea, select')) { sx = null; return; }
+    sx = e.touches[0].clientX; sy = e.touches[0].clientY;
+  }, { passive: true });
+  document.addEventListener('touchend', e => {
+    if (sx == null) return;
+    const dx = e.changedTouches[0].clientX - sx;
+    const dy = e.changedTouches[0].clientY - sy;
+    sx = null;
+    if (Math.abs(dx) < 70 || Math.abs(dy) > 60) return;
+    const i = NAV_PAGES.indexOf(currentPage);
+    if (i === -1) return;
+    const next = dx < 0 ? i + 1 : i - 1;
+    if (next >= 0 && next < NAV_PAGES.length) App.go(NAV_PAGES[next]);
+  }, { passive: true });
+})();
 
 // Gece kartı kaydırma (dokunmatik)
 function attachNightSwipe(card) {
