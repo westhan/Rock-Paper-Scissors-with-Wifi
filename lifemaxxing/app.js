@@ -221,7 +221,8 @@ function defaultState() {
     expenses: [],       // { ts, desc, amount, type: 'gider'|'gelir' }
     countdowns: [],     // { id, name, target }
     kingHabit: '',      // bu sayaç sıfırlanırsa tüm sayaçlar sıfırlanır
-    quoteSources: { moti: true, quran: false, bible: false }
+    quoteSources: { moti: true, quran: false, bible: false },
+    chartCfg: { period: 'week', type: 'bar', metrics: { done: true, study: true, xp: false, screen: false, cigs: false, prayers: false } }
   };
 }
 
@@ -243,7 +244,7 @@ function load() {
     S = raw ? Object.assign(defaultState(), JSON.parse(raw)) : defaultState();
     // eski sürümden yükseltme
     const d = defaultState();
-    for (const k of ['study', 'screenLog', 'screenPics', 'prayers', 'cigs', 'books', 'oneoffs', 'expenses', 'countdowns', 'quoteSources'])
+    for (const k of ['study', 'screenLog', 'screenPics', 'prayers', 'cigs', 'books', 'oneoffs', 'expenses', 'countdowns', 'quoteSources', 'chartCfg'])
       if (S[k] == null) S[k] = d[k];
     if (!S.screenGoal) S.screenGoal = 120;
     if (S.kingHabit == null) S.kingHabit = '';
@@ -505,6 +506,9 @@ function renderHome() {
   // Sayaç kartları
   $('mainTimers').innerHTML = S.habits.filter(h => h.timer).map(h => timerCardHTML(h)).join('');
 
+  // Grafikler
+  renderCharts();
+
   // Bugün beklenenler (ana olmayan, gizli olmayan)
   const today = S.habits.filter(h => !h.main && !h.timer && !h.hidden && h.freq !== 'free' && (neededToday(h) || isDoneToday(h)))
     .sort((a, b) => a.order - b.order);
@@ -702,6 +706,181 @@ function attachDrag(wrap) {
     });
   });
 }
+
+/* ============================================================
+   GRAFİKLER — küçük çoklu SVG kartları (kütüphanesiz, offline)
+   Renkler koyu zemine karşı CVD/kontrast doğrulamasından geçti.
+   ============================================================ */
+const METRICS = {
+  done:    { name: 'Tamamlanan Görev', unit: 'görev', color: '#3987e5' },
+  xp:      { name: 'Kazanılan XP',     unit: 'XP',    color: '#c98500' },
+  study:   { name: 'Ders Çalışma',     unit: 'dk',    color: '#199e70' },
+  screen:  { name: 'Ekran Süresi',     unit: 'dk',    color: '#9085e9' },
+  cigs:    { name: 'Sigara',           unit: 'adet',  color: '#e66767' },
+  prayers: { name: 'Namaz',            unit: 'vakit', color: '#d55181' }
+};
+const CHART_PERIODS = { week: 'Hafta', month: 'Ay', year: 'Yıl' };
+const CHART_TYPES = { bar: 'Çubuk', line: 'Çizgi', area: 'Alan' };
+
+function metricValue(m, k) {
+  if (m === 'study') return S.study.log[k] || 0;
+  if (m === 'screen') return S.screenLog[k] || 0;
+  if (m === 'cigs') return S.cigs[k] || 0;
+  if (m === 'prayers') {
+    const p = S.prayers[k];
+    return p ? PRAYER_NAMES.filter(([x]) => p[x]).length : 0;
+  }
+  if (m === 'done') {
+    let c = 0;
+    for (const h of S.habits) if (S.done[h.id] && S.done[h.id][k]) c++;
+    for (const o of S.oneoffs) if (o.done && dateKey(new Date(o.doneTs)) === k) c++;
+    return c;
+  }
+  if (m === 'xp') {
+    let xp = 0;
+    for (const h of S.habits) if (S.done[h.id] && S.done[h.id][k]) xp += xpForHabit(h);
+    for (const o of S.oneoffs) if (o.done && dateKey(new Date(o.doneTs)) === k) xp += o.xp || 20;
+    const p = S.prayers[k];
+    if (p) { xp += (p.kaza || 0) * 5; if (PRAYER_NAMES.every(([x]) => p[x])) xp += 25; }
+    return xp;
+  }
+  return 0;
+}
+
+// Dönem verisi: {labels, values} (eskiden yeniye)
+function chartData(m, period) {
+  const labels = [], values = [];
+  if (period === 'year') {
+    const now = new Date();
+    for (let i = 11; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const pre = d.getFullYear() + '-' + pad(d.getMonth() + 1);
+      let sum = 0;
+      const dim = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+      for (let g = 1; g <= dim; g++) sum += metricValue(m, pre + '-' + pad(g));
+      labels.push(d.toLocaleDateString('tr-TR', { month: 'short' }));
+      values.push(sum);
+    }
+  } else {
+    const n = period === 'week' ? 7 : 30;
+    for (let i = n - 1; i >= 0; i--) {
+      const d = new Date(); d.setDate(d.getDate() - i);
+      labels.push(period === 'week'
+        ? d.toLocaleDateString('tr-TR', { weekday: 'short' })
+        : String(d.getDate()));
+      values.push(metricValue(m, dateKey(d)));
+    }
+  }
+  return { labels, values };
+}
+
+function chartSVG(labels, values, type, color, unit) {
+  const W = 340, H = 140, padL = 34, padR = 8, padT = 16, padB = 20;
+  const iw = W - padL - padR, ih = H - padT - padB;
+  const max = Math.max(1, ...values);
+  const n = values.length;
+  const x = i => padL + (n === 1 ? iw / 2 : i * iw / (n - 1));
+  const y = v => padT + ih * (1 - v / max);
+  let marks = '', targets = '';
+  const maxIdx = values.indexOf(Math.max(...values));
+
+  if (type === 'bar') {
+    const slot = iw / n, bw = Math.max(2, Math.min(18, slot - 2));
+    values.forEach((v, i) => {
+      const bx = padL + i * slot + (slot - bw) / 2;
+      const by = v > 0 ? y(v) : padT + ih - 1;
+      const bh = v > 0 ? Math.max(2, padT + ih - by) : 1;
+      marks += `<rect x="${bx.toFixed(1)}" y="${by.toFixed(1)}" width="${bw.toFixed(1)}" height="${bh.toFixed(1)}" rx="2" fill="${color}" ${v === 0 ? 'opacity=".25"' : ''}/>`;
+      targets += `<rect x="${(padL + i * slot).toFixed(1)}" y="0" width="${slot.toFixed(1)}" height="${H}" fill="transparent" data-ttl="${labels[i]}: ${v} ${unit}"/>`;
+    });
+  } else {
+    const pts = values.map((v, i) => x(i).toFixed(1) + ',' + y(v).toFixed(1)).join(' ');
+    if (type === 'area') {
+      marks += `<polygon points="${x(0).toFixed(1)},${(padT + ih).toFixed(1)} ${pts} ${x(n - 1).toFixed(1)},${(padT + ih).toFixed(1)}" fill="${color}" opacity=".18"/>`;
+    }
+    marks += `<polyline points="${pts}" fill="none" stroke="${color}" stroke-width="2" stroke-linejoin="round"/>`;
+    marks += `<circle cx="${x(n - 1).toFixed(1)}" cy="${y(values[n - 1]).toFixed(1)}" r="3.5" fill="${color}" stroke="#1a2230" stroke-width="2"/>`;
+    values.forEach((v, i) => {
+      const slot = iw / n;
+      targets += `<rect x="${(padL + i * slot).toFixed(1)}" y="0" width="${slot.toFixed(1)}" height="${H}" fill="transparent" data-ttl="${labels[i]}: ${v} ${unit}"/>`;
+    });
+  }
+
+  // seçici direkt etiketler: en yüksek nokta + son nokta (metin rengi, seri rengi değil)
+  let dLabels = '';
+  if (values[maxIdx] > 0) {
+    const lx = type === 'bar' ? padL + maxIdx * (iw / n) + (iw / n) / 2 : x(maxIdx);
+    dLabels += `<text x="${lx.toFixed(1)}" y="${(y(values[maxIdx]) - 4).toFixed(1)}" text-anchor="middle" font-size="10" fill="#e9eef5">${values[maxIdx]}</text>`;
+  }
+
+  // eksen etiketleri: hafta → hepsi, ay → 5'te bir, yıl → hepsi
+  let xLabels = '';
+  labels.forEach((l, i) => {
+    if (n === 30 && i % 5 !== 0 && i !== n - 1) return;
+    const lx = type === 'bar' ? padL + i * (iw / n) + (iw / n) / 2 : x(i);
+    xLabels += `<text x="${lx.toFixed(1)}" y="${H - 6}" text-anchor="middle" font-size="9" fill="#8b98a9">${l}</text>`;
+  });
+
+  const mid = max / 2;
+  return `
+  <svg viewBox="0 0 ${W} ${H}" class="chart-svg" role="img">
+    <line x1="${padL}" y1="${padT}" x2="${W - padR}" y2="${padT}" stroke="#2a3549" stroke-width="1"/>
+    <line x1="${padL}" y1="${(padT + ih / 2).toFixed(1)}" x2="${W - padR}" y2="${(padT + ih / 2).toFixed(1)}" stroke="#2a3549" stroke-width="1"/>
+    <line x1="${padL}" y1="${padT + ih}" x2="${W - padR}" y2="${padT + ih}" stroke="#3a4761" stroke-width="1"/>
+    <text x="${padL - 5}" y="${padT + 3}" text-anchor="end" font-size="9" fill="#8b98a9">${max}</text>
+    <text x="${padL - 5}" y="${(padT + ih / 2 + 3).toFixed(1)}" text-anchor="end" font-size="9" fill="#8b98a9">${mid % 1 ? mid.toFixed(1) : mid}</text>
+    ${marks}${dLabels}${xLabels}${targets}
+  </svg>`;
+}
+
+let chartTableOpen = {};
+function renderCharts() {
+  const cfg = S.chartCfg;
+  $('chartPeriodRow').innerHTML = Object.keys(CHART_PERIODS).map(p =>
+    `<button class="pill ${cfg.period === p ? 'on' : ''}" onclick="App.chartPeriod('${p}')">${CHART_PERIODS[p]}</button>`).join('');
+  $('chartTypeRow').innerHTML = Object.keys(CHART_TYPES).map(t =>
+    `<button class="pill ${cfg.type === t ? 'on' : ''}" onclick="App.chartType('${t}')">${CHART_TYPES[t]}</button>`).join('');
+  $('chartMetricRow').innerHTML = Object.keys(METRICS).map(m =>
+    `<button class="pill metric ${cfg.metrics[m] ? 'on' : ''}" onclick="App.chartMetric('${m}')">
+      <span class="dot" style="background:${METRICS[m].color}"></span>${METRICS[m].name}</button>`).join('');
+
+  const active = Object.keys(METRICS).filter(m => cfg.metrics[m]);
+  $('chartCards').innerHTML = active.map(m => {
+    const { labels, values } = chartData(m, cfg.period);
+    const total = values.reduce((a, b) => a + b, 0);
+    const avg = total / values.length;
+    const M = METRICS[m];
+    let table = '';
+    if (chartTableOpen[m]) {
+      table = `<div class="chart-table">` + labels.map((l, i) =>
+        `<div class="ct-row"><span>${l}</span><span>${values[i]} ${M.unit}</span></div>`).join('') + `</div>`;
+    }
+    return `<div class="chart-card">
+      <div class="chart-head">
+        <span class="chart-title"><span class="dot" style="background:${M.color}"></span>${M.name}</span>
+        <span class="chart-sum">Toplam ${total % 1 ? total.toFixed(1) : total} ${M.unit} · ort ${avg < 10 ? avg.toFixed(1) : Math.round(avg)}</span>
+        <button class="q-tool" onclick="App.chartTable('${m}')">📋</button>
+      </div>
+      ${chartSVG(labels, values, cfg.type, M.color, M.unit)}
+      ${table}
+    </div>`;
+  }).join('') || '<p class="hint-block">Grafik için yukarıdan en az bir veri seç.</p>';
+}
+
+// Grafik dokunma ipucu (tooltip)
+document.addEventListener('pointerdown', e => {
+  const t = e.target.closest('[data-ttl]');
+  const tip = $('chartTip');
+  if (!tip) return;
+  if (t) {
+    tip.textContent = t.dataset.ttl;
+    tip.classList.remove('hidden');
+    tip.style.left = Math.min(window.innerWidth - 130, Math.max(8, e.clientX - 60)) + 'px';
+    tip.style.top = (e.clientY - 44) + 'px';
+    clearTimeout(tip._hideT);
+    tip._hideT = setTimeout(() => tip.classList.add('hidden'), 1800);
+  } else tip.classList.add('hidden');
+});
 
 // ----- Rozetler -----
 function renderBadges() {
@@ -1334,6 +1513,12 @@ const App = {
 
   // --- Pasif görev listesi ---
   toggleHiddenList() { hiddenListOpen = !hiddenListOpen; renderHome(); },
+
+  // --- Grafik ayarları ---
+  chartPeriod(p) { S.chartCfg.period = p; save(); renderCharts(); },
+  chartType(t) { S.chartCfg.type = t; save(); renderCharts(); },
+  chartMetric(m) { S.chartCfg.metrics[m] = !S.chartCfg.metrics[m]; save(); renderCharts(); },
+  chartTable(m) { chartTableOpen[m] = !chartTableOpen[m]; renderCharts(); },
 
   // --- Namaz ---
   togglePrayer(k) {
