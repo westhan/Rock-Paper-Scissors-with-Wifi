@@ -98,51 +98,79 @@
         <div class="epic-line" id="dailyQuote"></div>
       </div>
 
-      <!-- GERİ SAYIMLAR -->
-      <div id="countdownRow" class="countdown-row"></div>
+      <div id="homeSections">
+        <!-- İLERLEME -->
+        <div class="hsec" data-sec="progress">
+          <div id="progressCard"></div>
+        </div>
 
-      <!-- TEK SEFERLİK GÖREVLER -->
-      <div class="section-title">📌 Tek Seferlik <span class="hint">(bugünün ekstra işleri)</span></div>
-      <div class="add-row">
-        <input id="oneoffInput" placeholder="Örn: Göz doktorundan randevu al" maxlength="80">
-        <select id="oneoffXp" class="xp-select">
-          <option value="10">+10</option>
-          <option value="20" selected>+20</option>
-          <option value="50">+50</option>
-        </select>
-        <button class="btn btn-gold" onclick="App.addOneoff()">＋</button>
+        <!-- GERİ SAYIMLAR -->
+        <div class="hsec" data-sec="countdowns">
+          <div id="countdownRow" class="countdown-row"></div>
+        </div>
+
+        <!-- TEK SEFERLİK GÖREVLER -->
+        <div class="hsec" data-sec="oneoff">
+          <div class="section-title">📌 Tek Seferlik <span class="hint">(bugünün ekstra işleri)</span></div>
+          <div class="add-row">
+            <input id="oneoffInput" placeholder="Örn: Göz doktorundan randevu al" maxlength="80">
+            <select id="oneoffXp" class="xp-select">
+              <option value="10">+10</option>
+              <option value="20" selected>+20</option>
+              <option value="50">+50</option>
+            </select>
+            <button class="btn btn-gold" onclick="App.addOneoff()">＋</button>
+          </div>
+          <div id="oneoffList" class="quest-list"></div>
+        </div>
+
+        <!-- ANA GÖREVLER -->
+        <div class="hsec" data-sec="mains">
+          <div class="section-title">🎯 Ana Görevler <span class="hint">(en önemli 5 · sürükleyerek sırala · basılı tut = düzenle)</span></div>
+          <div id="mainQuests" class="quest-list"></div>
+        </div>
+
+        <!-- GECE DEĞERLENDİRMESİ -->
+        <div class="hsec" data-sec="night">
+          <button class="btn btn-night btn-block mt" onclick="App.openNight()">🌙 Günü Kapat — Kaydırarak Değerlendir</button>
+        </div>
+
+        <!-- ASIL TAKİPLER: büyük sayaçlar -->
+        <div class="hsec" data-sec="timers">
+          <div class="section-title">⚔️ Asıl Savaşlar</div>
+          <div id="mainTimers" class="timer-cards"></div>
+        </div>
+
+        <!-- GRAFİKLER -->
+        <div class="hsec" data-sec="charts">
+          <div class="section-title">📊 Grafikler</div>
+          <div class="pill-row" id="chartPeriodRow"></div>
+          <div class="pill-row" id="chartTypeRow"></div>
+          <div class="pill-row" id="chartMetricRow"></div>
+          <div id="chartCards"></div>
+        </div>
+
+        <!-- BUGÜNÜN DİĞER GÖREVLERİ -->
+        <div class="hsec" data-sec="today">
+          <div class="section-title">🗡️ Bugünün Görevleri</div>
+          <div id="todayQuests" class="quest-list"></div>
+        </div>
+
+        <!-- SERBEST GÖREVLER -->
+        <div class="hsec" data-sec="free">
+          <div class="section-title">🏹 Serbest Görevler <span class="hint">(devamlılık yükü yok — yapınca işaretle)</span></div>
+          <div id="freeQuests" class="quest-list collapsed-list"></div>
+        </div>
+
+        <!-- PASİF / NADİR GÖREVLER -->
+        <div class="hsec" data-sec="hidden">
+          <button id="hiddenToggle" class="btn btn-outline btn-block mt" onclick="App.toggleHiddenList()">＋ Diğer (pasif görevler)</button>
+          <div id="hiddenQuests" class="quest-list hidden"></div>
+        </div>
       </div>
-      <div id="oneoffList" class="quest-list"></div>
 
-      <!-- ANA GÖREVLER -->
-      <div class="section-title">🎯 Ana Görevler <span class="hint">(en önemli 5 · sürükleyerek sırala · basılı tut = düzenle)</span></div>
-      <div id="mainQuests" class="quest-list"></div>
-
-      <button class="btn btn-night btn-block mt" onclick="App.openNight()">🌙 Günü Kapat — Kaydırarak Değerlendir</button>
-
-      <!-- ASIL TAKİPLER: büyük sayaçlar -->
-      <div class="section-title">⚔️ Asıl Savaşlar</div>
-      <div id="mainTimers" class="timer-cards"></div>
-
-      <!-- GRAFİKLER -->
-      <div class="section-title">📊 Grafikler</div>
-      <div class="pill-row" id="chartPeriodRow"></div>
-      <div class="pill-row" id="chartTypeRow"></div>
-      <div class="pill-row" id="chartMetricRow"></div>
-      <div id="chartCards"></div>
       <div id="chartTip" class="chart-tip hidden"></div>
-
-      <!-- BUGÜNÜN DİĞER GÖREVLERİ -->
-      <div class="section-title">🗡️ Bugünün Görevleri</div>
-      <div id="todayQuests" class="quest-list"></div>
-
-      <!-- SERBEST GÖREVLER -->
-      <div class="section-title">🏹 Serbest Görevler <span class="hint">(devamlılık yükü yok — yapınca işaretle)</span></div>
-      <div id="freeQuests" class="quest-list collapsed-list"></div>
-
-      <!-- PASİF / NADİR GÖREVLER -->
-      <button id="hiddenToggle" class="btn btn-outline btn-block mt" onclick="App.toggleHiddenList()">＋ Diğer (pasif görevler)</button>
-      <div id="hiddenQuests" class="quest-list hidden"></div>
+      <button class="btn btn-outline btn-block mt layout-btn" onclick="App.toggleLayoutEdit()">🧩 Bölüm sırasını düzenle</button>
     </section>
 
     <!-- ===== GÖREVLER (tümü / düzenleme / sıralama) ===== -->

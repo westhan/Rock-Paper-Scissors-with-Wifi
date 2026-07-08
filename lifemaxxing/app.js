@@ -222,7 +222,8 @@ function defaultState() {
     countdowns: [],     // { id, name, target }
     kingHabit: '',      // bu sayaç sıfırlanırsa tüm sayaçlar sıfırlanır
     quoteSources: { moti: true, quran: false, bible: false },
-    chartCfg: { period: 'week', type: 'bar', metrics: { done: true, study: true, xp: false, screen: false, cigs: false, prayers: false } }
+    chartCfg: { period: 'week', type: 'bar', metrics: { done: true, study: true, xp: false, screen: false, cigs: false, prayers: false } },
+    homeOrder: ['progress', 'countdowns', 'oneoff', 'mains', 'night', 'timers', 'charts', 'today', 'free', 'hidden']
   };
 }
 
@@ -244,7 +245,7 @@ function load() {
     S = raw ? Object.assign(defaultState(), JSON.parse(raw)) : defaultState();
     // eski sürümden yükseltme
     const d = defaultState();
-    for (const k of ['study', 'screenLog', 'screenPics', 'prayers', 'cigs', 'books', 'oneoffs', 'expenses', 'countdowns', 'quoteSources', 'chartCfg'])
+    for (const k of ['study', 'screenLog', 'screenPics', 'prayers', 'cigs', 'books', 'oneoffs', 'expenses', 'countdowns', 'quoteSources', 'chartCfg', 'homeOrder'])
       if (S[k] == null) S[k] = d[k];
     if (!S.screenGoal) S.screenGoal = 120;
     if (S.kingHabit == null) S.kingHabit = '';
@@ -469,11 +470,106 @@ function renderTop() {
   $('topHeroRank').textContent = 'Lv ' + level() + ' · ' + r.n + ' · ' + totalXP() + ' XP';
 }
 
+// ----- İlerleme kartı: hep yükselen birikimli XP + haftalık kıyas -----
+const SEC_NAMES = {
+  progress: '🚀 İlerleme', countdowns: '⏳ Geri Sayımlar', oneoff: '📌 Tek Seferlik',
+  mains: '🎯 Ana Görevler', night: '🌙 Günü Kapat', timers: '⚔️ Asıl Savaşlar',
+  charts: '📊 Grafikler', today: '🗡️ Bugünün Görevleri', free: '🏹 Serbest', hidden: '🕶️ Pasif'
+};
+let layoutEdit = false;
+
+function renderProgress() {
+  const days = 14;
+  let cum = 0;
+  const vals = [];
+  let thisW = 0, lastW = 0, todayV = 0;
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date(); d.setDate(d.getDate() - i);
+    const v = metricValue('xp', dateKey(d));
+    cum += v; vals.push(cum);
+    if (i === 0) todayV = v;
+    if (i < 7) thisW += v; else lastW += v;
+  }
+  const L = level(), xp = totalXP();
+  const span = Math.max(1, xpNeed(L + 1) - xpNeed(L));
+  const pct = Math.min(100, Math.round((xp - xpNeed(L)) / span * 100));
+  let msg;
+  if (thisW === 0 && lastW === 0) msg = '✨ Yolculuk seni bekliyor — ilk görevi tamamla, grafik yükselsin.';
+  else if (lastW === 0 && thisW > 0) msg = '🔥 Yeni bir ivme başladı — bu hafta ' + thisW + ' XP topladın!';
+  else if (thisW >= lastW) msg = '🔥 Geçen haftadan %' + Math.round((thisW - lastW) / lastW * 100) + ' daha güçlüsün. İvme sende!';
+  else msg = '💪 Dalgalanma normaldir. Bugün tek bir görev, ivmeyi geri getirir.';
+
+  // birikimli XP mini alan grafiği (hep yukarı — iyi hissettirir)
+  const W = 320, H = 72, p = 4;
+  const max = Math.max(1, vals[vals.length - 1]);
+  const min = vals[0];
+  const range = Math.max(1, max - min);
+  const x = i => p + i * (W - 2 * p) / (days - 1);
+  const y = v => p + (H - 2 * p) * (1 - (v - min) / range);
+  const pts = vals.map((v, i) => x(i).toFixed(1) + ',' + y(v).toFixed(1)).join(' ');
+  const spark = `
+    <svg viewBox="0 0 ${W} ${H}" class="prog-spark" role="img">
+      <polygon points="${p},${H - p} ${pts} ${W - p},${H - p}" fill="#e8b93c" opacity=".16"/>
+      <polyline points="${pts}" fill="none" stroke="#e8b93c" stroke-width="2.5" stroke-linejoin="round"/>
+      <circle cx="${x(days - 1).toFixed(1)}" cy="${y(vals[days - 1]).toFixed(1)}" r="4" fill="#e8b93c" stroke="#161e2b" stroke-width="2"/>
+    </svg>`;
+
+  $('progressCard').innerHTML = `
+    <div class="progress-card">
+      <div class="prog-head">
+        <span class="prog-title">🚀 İlerleme</span>
+        <span class="prog-level">⚡ Seviye ${L}</span>
+      </div>
+      <div class="prog-nums">
+        <div class="prog-num"><b>+${todayV}</b><span>bugün</span></div>
+        <div class="prog-num"><b>${thisW}</b><span>bu hafta</span></div>
+        <div class="prog-num"><b>${xp}</b><span>toplam XP</span></div>
+      </div>
+      ${spark}
+      <div class="prog-spark-labels"><span>14 gün önce</span><span>bugün</span></div>
+      <div class="lv-bar"><div class="lv-fill" style="width:${pct}%"></div></div>
+      <div class="prog-pct">Seviye ${L + 1}'e %${pct}</div>
+      <p class="prog-msg">${msg}</p>
+    </div>`;
+}
+
+// Ana ekran bölüm sırası + düzen modu
+function applyHomeOrder() {
+  const cont = $('homeSections');
+  const order = S.homeOrder.filter(k => SEC_NAMES[k]);
+  for (const key of Object.keys(SEC_NAMES)) if (!order.includes(key)) order.push(key);
+  S.homeOrder = order;
+  for (const key of order) {
+    const el = cont.querySelector(`.hsec[data-sec="${key}"]`);
+    if (el) cont.appendChild(el);
+  }
+  // düzen modu: her bölüme ▲▼ kolu
+  cont.querySelectorAll('.hsec').forEach(el => {
+    el.classList.toggle('editing', layoutEdit);
+    const old = el.querySelector('.sec-handle');
+    if (old) old.remove();
+    if (layoutEdit) {
+      const key = el.dataset.sec;
+      const bar = document.createElement('div');
+      bar.className = 'sec-handle';
+      bar.innerHTML = `<span>${SEC_NAMES[key]}</span>
+        <span class="sec-arrows">
+          <button onclick="App.moveSection('${key}', -1)">▲</button>
+          <button onclick="App.moveSection('${key}', 1)">▼</button>
+        </span>`;
+      el.prepend(bar);
+    }
+  });
+}
+
 // ----- Ana sayfa -----
 let hiddenListOpen = false;
 function renderHome() {
   const pool = quotePool();
   $('dailyQuote').textContent = '“' + pool[dayOfYear() % pool.length] + '”';
+
+  renderProgress();
+  applyHomeOrder();
 
   // Geri sayımlar
   $('countdownRow').innerHTML = S.countdowns.map(c => {
@@ -1513,6 +1609,17 @@ const App = {
 
   // --- Pasif görev listesi ---
   toggleHiddenList() { hiddenListOpen = !hiddenListOpen; renderHome(); },
+
+  // --- Ana ekran düzeni ---
+  toggleLayoutEdit() { layoutEdit = !layoutEdit; applyHomeOrder(); },
+  moveSection(key, dir) {
+    const i = S.homeOrder.indexOf(key);
+    const j = i + dir;
+    if (i < 0 || j < 0 || j >= S.homeOrder.length) return;
+    [S.homeOrder[i], S.homeOrder[j]] = [S.homeOrder[j], S.homeOrder[i]];
+    save();
+    applyHomeOrder();
+  },
 
   // --- Grafik ayarları ---
   chartPeriod(p) { S.chartCfg.period = p; save(); renderCharts(); },
