@@ -3,16 +3,23 @@
 Uygulaman tamamen offline çalışır; kurulum için sadece **bir kere** internetten açman gerekir.
 Verilerin hiçbir zaman internete gitmez — hepsi telefonunda kalır.
 
-## Adım 1: Uygulamayı bir adrese koy (5 dakika, bir kere)
+## Adım 1 (EN KOLAY): GitHub Pages — tek tık kaldı
 
-En kolay yol — **Netlify Drop** (ücretsiz, hesap bile şart değil):
+Uygulama `gh-pages` dalına otomatik yayınlanıyor. Tek yapman gereken (bir kere):
 
-1. Bilgisayarında `lifemaxxing` klasörünü indir (GitHub → Code → Download ZIP → içinden `lifemaxxing` klasörü).
-2. Tarayıcıda **app.netlify.com/drop** adresine git.
-3. `lifemaxxing` klasörünü sayfaya **sürükleyip bırak**.
-4. Sana `https://sakin-kartal-123abc.netlify.app` gibi rastgele bir adres verir. **Bu adresi kimseyle paylaşmazsan kimse bulamaz** — arama motorlarında listelenmez.
+1. Şu adresi aç: **github.com/westhan/Rock-Paper-Scissors-with-Wifi/settings/pages**
+2. "Build and deployment" → Source: **Deploy from a branch** → Branch: **gh-pages** → **Save**.
+3. 1-2 dakika sonra uygulaman şurada canlı olur:
+   **https://westhan.github.io/Rock-Paper-Scissors-with-Wifi/**
+4. Bu adresi telefonda Safari ile aç → Adım 2'ye geç.
 
-> Alternatif: GitHub Pages da olur ama repo'nun public olması gerekir. Gizlilik istediğin için Netlify'ın rastgele adresi daha uygun.
+Bundan sonrası otomatik: her güncelleme push'unda site kendini yeniler.
+
+## Adım 1 (Alternatif): Netlify Drop
+
+1. `LifeMaxx.zip` dosyasını indir (Claude'un gönderdiği dosya veya GitHub → Code → Download ZIP).
+2. Tarayıcıda **app.netlify.com/drop** adresine git, ZIP'i sayfaya **sürükleyip bırak**.
+3. Sana `https://sakin-kartal-123abc.netlify.app` gibi rastgele bir adres verir — arama motorlarında listelenmez.
 
 ## Adım 2: Telefonda ana ekrana ekle (1 dakika)
 
