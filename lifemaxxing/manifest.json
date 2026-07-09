@@ -1,0 +1,16 @@
+{
+  "name": "LifeMaxx — Kahramanın Yolculuğu",
+  "short_name": "LifeMaxx",
+  "description": "Bağımlılıkla savaş, alışkanlık takibi ve kahramanlık yolculuğu. Offline çalışır.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0d1117",
+  "theme_color": "#0d1117",
+  "lang": "tr",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
